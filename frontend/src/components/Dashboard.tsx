@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Plus, Lock, Unlock, Calendar, Paperclip, UserPlus, 
-  FileUp, FileText, CheckCircle2, Clock, Play, PlusCircle, X, Download
+  FileUp, FileText, CheckCircle2, Clock, Play, X, Download
 } from 'lucide-react';
 
 interface User {
@@ -65,10 +65,10 @@ export default function Dashboard({ currentUser }: DashboardProps) {
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [activeSpace, setActiveSpace] = useState<Space | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [users, setUsers] = useState<User[]>([]); // Për ftesa dhe caktim detyrash
+  const [users, setUsers] = useState<User[]>([]);
   const [spaceMembers, setSpaceMembers] = useState<User[]>([]);
 
-  // State-et e modal-eve dhe formularëve
+  // State-et e modal-eve
   const [showCreateSpace, setShowCreateSpace] = useState(false);
   const [spaceName, setSpaceName] = useState('');
   const [spaceDesc, setSpaceDesc] = useState('');
@@ -243,7 +243,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     }
   };
 
-  // Regjistrimi i një përdoruesi të ri në sistem (vetëm nga Admin)
+  // Regjistrimi i përdoruesit
   const handleRegisterUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -275,7 +275,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     }
   };
 
-  // Ndryshimi i Statusit të Detyrës (p.sh. TODO -> IN_PROGRESS -> COMPLETED)
+  // Ndryshimi i Statusit të Detyrës
   const handleStatusChange = async (taskId: string, newStatus: string) => {
     try {
       const res = await fetch(`/api/tasks/${taskId}/status`, {
@@ -284,8 +284,6 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         body: JSON.stringify({ status: newStatus }),
       });
       if (res.ok) {
-        const updated = await res.json();
-        // Përditëso listën e detyrave
         setTasks(tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
         if (selectedTask && selectedTask.id === taskId) {
           setSelectedTask({ ...selectedTask, status: newStatus });
@@ -309,15 +307,14 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     try {
       const res = await fetch(`/api/tasks/${selectedTask.id}/attachments`, {
         method: 'POST',
-        body: formData, // nuk vendosim Content-Type header sepas multer do boundary
+        body: formData,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      // Shto skedarin te detyra aktive
       const updatedTask = {
         ...selectedTask,
-        attachments: [...selectedTask.attachments, data]
+        attachments: [...(selectedTask.attachments || []), data]
       };
       setSelectedTask(updatedTask);
       setTasks(tasks.map(t => t.id === selectedTask.id ? updatedTask : t));
@@ -329,7 +326,6 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     }
   };
 
-  // Filtro detyrat sipas kolonave
   const getTasksByStatus = (status: string) => {
     return tasks.filter(t => t.status === status);
   };
@@ -396,7 +392,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
               borderRadius: 'var(--border-radius-md)',
               fontSize: '0.85rem',
               display: 'flex',
-              justify-content: 'space-between',
+              justify: 'space-between',
               alignItems: 'center'
             }}
           >
@@ -414,7 +410,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                 <h2>{activeSpace.name}</h2>
                 <p>{activeSpace.description || 'Nuk ka përshkrim për këtë hapësirë.'}</p>
                 <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginTop: '6px' }}>
-                  Anëtarë: {spaceMembers.length} | Krijuesi: {activeSpace.createdBy.firstName} {activeSpace.createdBy.lastName}
+                  Anëtarë: {spaceMembers.length} | Krijuesi: {activeSpace.createdBy?.firstName} {activeSpace.createdBy?.lastName}
                 </div>
               </div>
 
@@ -434,9 +430,9 @@ export default function Dashboard({ currentUser }: DashboardProps) {
               </div>
             </div>
 
-            {/* Detyrat e ndara në kolonat TODO, IN_PROGRESS, COMPLETED */}
+            {/* Detyrat e ndara në 3 kolona */}
             <div className="tasks-layout">
-              {/* Kolona 1: Për t'u bërë (TODO) */}
+              {/* TODO */}
               <div className="task-column">
                 <div className="column-header">
                   <span className="column-title" style={{ color: 'hsl(var(--accent-warning))' }}>
@@ -464,7 +460,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                 </div>
               </div>
 
-              {/* Kolona 2: Në proces (IN_PROGRESS) */}
+              {/* IN_PROGRESS */}
               <div className="task-column">
                 <div className="column-header">
                   <span className="column-title" style={{ color: 'hsl(var(--primary))' }}>
@@ -492,7 +488,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                 </div>
               </div>
 
-              {/* Kolona 3: E përfunduar (COMPLETED) */}
+              {/* COMPLETED */}
               <div className="task-column">
                 <div className="column-header">
                   <span className="column-title" style={{ color: 'hsl(var(--accent-success))' }}>
@@ -530,7 +526,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         )}
       </main>
 
-      {/* ================= MODAL: KRIJO SPACE ================= */}
+      {/* MODAL: KRIJO SPACE */}
       {showCreateSpace && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -588,7 +584,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         </div>
       )}
 
-      {/* ================= MODAL: FTO ANETAR ================= */}
+      {/* MODAL: FTO ANETAR */}
       {showInviteMember && activeSpace && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -609,9 +605,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                   >
                     <option value="">Zgjidh një anëtar...</option>
                     {users
-                      // Nëse space është privat, fto vetëm ADMIN-ët, ndryshe lejo të gjithë
                       .filter(u => !activeSpace.isPrivate || u.role === 'ADMIN')
-                      // Filtro ata që janë tashmë anëtarë të këtij Space
                       .filter(u => !spaceMembers.some(m => m.id === u.id))
                       .map(u => (
                         <option key={u.id} value={u.id}>
@@ -630,7 +624,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         </div>
       )}
 
-      {/* ================= MODAL: SHTO TASK ================= */}
+      {/* MODAL: SHTO TASK */}
       {showCreateTask && activeSpace && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -648,7 +642,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                     className="input-field" 
                     value={taskTitle} 
                     onChange={e => setTaskTitle(e.target.value)} 
-                    placeholder="p.sh. Përgatit raportin mujor të shitjeve" 
+                    placeholder="p.sh. Përgatit raportin mujor" 
                     required 
                   />
                 </div>
@@ -697,7 +691,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         </div>
       )}
 
-      {/* ================= MODAL: REGJISTRO PUNONJES ================= */}
+      {/* MODAL: REGJISTRO PUNONJES */}
       {showRegisterUser && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -774,7 +768,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         </div>
       )}
 
-      {/* ================= MODAL: DETAJET E TASK-UT ================= */}
+      {/* MODAL: DETAJET E TASK-UT */}
       {selectedTask && (
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '600px' }}>
@@ -805,7 +799,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
 
                 <div>
                   <span className="task-detail-label">Afati i fundit</span>
-                  <div className="task-detail-val" style={{ marginTop: '8px', display: 'flex', alignValues: 'center', gap: '6px' }}>
+                  <div className="task-detail-val" style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Calendar size={16} />
                     <span>
                       {new Date(selectedTask.deadline).toLocaleString('sq-AL', {
@@ -817,83 +811,67 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                 </div>
               </div>
 
-              <div className="task-detail-section">
+              <div className="task-detail-section" style={{ marginBottom: '20px' }}>
                 <span className="task-detail-label">Përshkrimi</span>
                 <p style={{ marginTop: '6px', fontSize: '0.95rem', color: 'hsl(var(--text-secondary))', whiteSpace: 'pre-line' }}>
                   {selectedTask.description || 'Nuk ka përshkrim për këtë detyrë.'}
                 </p>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px', borderTop: '1px solid hsl(var(--border-muted))', paddingTop: '16px' }}>
-                <div>
-                  <span className="task-detail-label">Caktuar Për</span>
-                  <p className="task-detail-val" style={{ marginTop: '4px' }}>
-                    {selectedTask.assignedTo 
-                      ? `${selectedTask.assignedTo.firstName} ${selectedTask.assignedTo.lastName}` 
-                      : 'I pacaktuar'}
-                  </p>
-                </div>
-                <div>
-                  <span className="task-detail-label">Krijuar Nga</span>
-                  <p className="task-detail-val" style={{ marginTop: '4px' }}>
-                    {selectedTask.createdBy.firstName} {selectedTask.createdBy.lastName}
-                  </p>
-                </div>
-              </div>
-
-              {/* SHTOJCAT (ATTACHMENTS) */}
-              <div style={{ borderTop: '1px solid hsl(var(--border-muted))', paddingTop: '16px' }}>
+              {/* Shtojcat (Attachments) */}
+              <div className="task-detail-section">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                  <span className="task-detail-label">Dokumente & Shtojca</span>
+                  <span className="task-detail-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Paperclip size={16} />
+                    <span>Skedarët e bashkëngjitur ({selectedTask.attachments?.length || 0})</span>
+                  </span>
                   
-                  {/* Ngarkimi i Skedarit */}
-                  <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', gap: '6px' }}>
+                  <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', padding: '4px 10px' }}>
                     <FileUp size={14} />
-                    <span>{uploadingFile ? 'Duke u ngarkuar...' : 'Ngarko Skedar'}</span>
-                    <input 
-                      type="file" 
-                      onChange={handleFileUpload} 
-                      style={{ display: 'none' }} 
-                      disabled={uploadingFile}
-                    />
+                    <span>{uploadingFile ? 'Po ngarkohet...' : 'Ngarko Skedar'}</span>
+                    <input type="file" onChange={handleFileUpload} disabled={uploadingFile} style={{ display: 'none' }} />
                   </label>
                 </div>
 
-                <div className="attachments-list">
-                  {selectedTask.attachments && selectedTask.attachments.map(att => (
-                    <div key={att.id} className="attachment-row">
-                      <div className="attachment-info">
-                        <FileText size={16} style={{ color: 'hsl(var(--primary))' }} />
-                        <div>
-                          <p style={{ fontWeight: '500' }}>{att.fileName}</p>
-                          <p style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>
-                            {(att.fileSize / 1024).toFixed(1)} KB | Ngarkuar më {new Date(att.uploadedAt).toLocaleDateString('sq-AL')}
-                          </p>
-                        </div>
-                      </div>
-                      <a 
-                        href={`/api/tasks/${selectedTask.id}/attachments/${att.id}`} 
-                        className="btn btn-secondary btn-sm" 
-                        style={{ padding: '6px', borderRadius: '50%' }}
-                        download
-                        title="Shkarko skedarin"
+                <div className="attachments-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {selectedTask.attachments && selectedTask.attachments.length > 0 ? (
+                    selectedTask.attachments.map(att => (
+                      <div 
+                        key={att.id} 
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justify: 'space-between',
+                          padding: '8px 12px',
+                          backgroundColor: 'hsl(var(--bg-secondary))',
+                          borderRadius: 'var(--border-radius-sm)'
+                        }}
                       >
-                        <Download size={14} />
-                      </a>
-                    </div>
-                  ))}
-
-                  {(!selectedTask.attachments || selectedTask.attachments.length === 0) && (
-                    <p style={{ fontSize: '0.85rem', color: 'hsl(var(--text-muted))', fontStyle: 'italic', textAlign: 'center', padding: '10px 0' }}>
-                      Nuk ka asnjë skedar të bashkëngjitur në këtë detyrë.
-                    </p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                          <FileText size={16} />
+                          <span style={{ fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {att.fileName}
+                          </span>
+                        </div>
+                        <a 
+                          href={`/api/attachments/${att.id}/download`} 
+                          download 
+                          className="btn btn-secondary btn-sm" 
+                          style={{ padding: '4px 8px' }}
+                        >
+                          <Download size={14} />
+                        </a>
+                      </div>
+                    ))
+                  ) : (
+                    <span style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))' }}>Nuk ka skedarë të bashkëngjitur.</span>
                   )}
                 </div>
               </div>
 
             </div>
             <div className="modal-footer">
-              <button className="btn btn-primary" onClick={() => setSelectedTask(null)}>Mbyll</button>
+              <button type="button" className="btn btn-secondary" onClick={() => setSelectedTask(null)}>Mbyll</button>
             </div>
           </div>
         </div>

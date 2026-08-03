@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LogIn, Key, UserCheck, ShieldAlert } from 'lucide-react';
+import { LogIn, UserCheck, ShieldAlert } from 'lucide-react';
 
 interface LoginProps {
   onLoginSuccess: (user: {
@@ -76,7 +76,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             marginBottom: '20px',
             fontSize: '0.85rem',
             display: 'flex',
-            align-items: 'center',
+            alignItems: 'center',
             gap: '8px'
           }}>
             <ShieldAlert size={16} />
