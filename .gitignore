@@ -1,0 +1,43 @@
+# Varësitë (Dependencies)
+node_modules/
+.pnp
+.pnp.js
+
+# Build dhe Distributimi
+dist/
+build/
+.svelte-kit
+.next
+out/
+
+# Variablat e Mjedisit (Environment variables - Secrets)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.env
+*.env
+
+# Log skedarët
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.log
+
+# Skedarët e ngarkuar lokalisht (Uploads)
+backend/uploads/
+uploads/
+
+# Skedarët e sistemit (OS metadata)
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

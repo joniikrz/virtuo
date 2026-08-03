@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # Shërbimi i Databazës (PostgreSQL)
+  db:
+    image: postgres:15-alpine
+    container_name: virtuo-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_secure_password
+      POSTGRES_DB: virtuo
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    expose:
+      - "5432"
+
+  # Shërbimi i Backend (Express API)
+  backend:
+    build: ./backend
+    container_name: virtuo-backend
+    restart: always
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - JWT_SECRET=virtuo_super_secret_session_key_987654321
+      - FRONTEND_URL=http://localhost
+      - DATABASE_URL=postgresql://postgres:postgres_secure_password@db:5432/virtuo?schema=public
+      - UPLOAD_DIR=/app/uploads
+      # Rregulloni këto variabla me serverin tuaj SMTP real
+      - SMTP_HOST=smtp.mailtrap.io
+      - SMTP_PORT=2525
+      - SMTP_SECURE=false
+      - SMTP_USER=your_smtp_username
+      - SMTP_PASS=your_smtp_password
+      - SMTP_FROM="Virtuo Task Manager" <no-reply@virtuo.local>
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      - db
+    expose:
+      - "5000"
+
+  # Shërbimi i Frontend (React UI me Nginx)
+  frontend:
+    build: ./frontend
+    container_name: virtuo-frontend
+    restart: always
+    ports:
+      - "80:80" # Hapet në portën standarde HTTP të serverit fizik
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+    driver: local
+  uploads_data:
+    driver: local
