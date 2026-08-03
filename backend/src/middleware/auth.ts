@@ -18,7 +18,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'virtuo-super-secret-key-12345';
  * Middleware për autentikimin e përdoruesit përmes JWT.
  * Kontrollon fillimisht Cookie-n e sigurt HTTP-Only, pastaj header-in Authorization.
  */
-export async function authenticateToken(req: AuthRequest, res: Response, next: NextFunction) {
+export async function authenticateToken(req: AuthRequest, res: Response, next: NextFunction): Promise<any> {
   let token = req.cookies?.token;
 
   if (!token && req.headers.authorization) {
@@ -34,7 +34,7 @@ export async function authenticateToken(req: AuthRequest, res: Response, next: N
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-    
+
     // Gjej përdoruesin dhe rolin e tij në databazë
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
@@ -53,8 +53,8 @@ export async function authenticateToken(req: AuthRequest, res: Response, next: N
       lastName: user.lastName,
     };
 
-    next();
-  } catch (error) {
+    return next(); // ✅ Ndryshuar: Shtuar 'return'
+  } catch (_error) { // ✅ Ndryshuar: _error me vizë poshtë që të mos ankohet TS6133
     return res.status(403).json({ error: 'Token i pavlefshëm ose i skaduar' });
   }
 }
@@ -62,9 +62,9 @@ export async function authenticateToken(req: AuthRequest, res: Response, next: N
 /**
  * Middleware që lejon qasjen vetëm për rolin ADMIN (Shefat/Menaxherët).
  */
-export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction) {
+export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction): any {
   if (!req.user || req.user.role !== 'ADMIN') {
     return res.status(403).json({ error: 'Nuk keni privilegje të mjaftueshme për këtë veprim (Kërkohet rolin Admin)' });
   }
-  next();
+  return next(); // ✅ Ndryshuar: Shtuar 'return'
 }
