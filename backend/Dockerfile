@@ -1,39 +1,34 @@
-# 1. Përdorimi i imazhit zyrtar të Node.js
-FROM node:20-alpine AS builder
+# 1. Stage për build-in e Node/Express & Prisma
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# Kopjimi i paketave të varësive
+# Këtu duhet openssl sepse këtu është Prisma!
+RUN apk add --no-cache openssl libc6-compat
+
 COPY package*.json ./
-RUN npm install
-
-# Kopjimi i skedarëve të projektit dhe schema.prisma
-COPY tsconfig.json ./
 COPY prisma ./prisma/
-COPY src ./src/
 
-# Gjenerimi i Prisma Client dhe ndërtimi i projektit (build)
+RUN npm install
 RUN npx prisma generate
+
+COPY . .
 RUN npm run build
 
-# 2. Faza e ekzekutimit (Run stage) për të pasur një imazh sa më të lehtë
+# 2. Stage për ekzekutimin në Production
 FROM node:20-alpine
 
 WORKDIR /app
 
+RUN apk add --no-cache openssl libc6-compat
+
 COPY package*.json ./
 RUN npm install --only=production
 
-# Kopjimi i skedarëve të ndërtuar nga faza e parë
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
-
-# Krijimi i dosjes për uploads lokale të skedarëve
-RUN mkdir -p /app/uploads
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/prisma ./prisma
+COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 
 EXPOSE 5000
 
-# Nisja e serverit duke u siguruar që të ekzistojë Prisma client i gjeneruar
-CMD npx prisma db push --accept-data-loss && node dist/index.js
+CMD ["node", "dist/index.js"]
