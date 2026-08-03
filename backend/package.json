@@ -7,6 +7,8 @@
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"
@@ -23,6 +25,7 @@
     "nodemailer": "^6.9.14"
   },
   "devDependencies": {
+    "@jridgewell/sourcemap-codec": "^1.5.5",
     "@types/bcryptjs": "^2.4.6",
     "@types/cookie-parser": "^1.4.7",
     "@types/cors": "^2.8.17",
@@ -31,8 +34,19 @@
     "@types/multer": "^1.4.11",
     "@types/node": "^20.14.15",
     "@types/nodemailer": "^6.4.15",
+    "@types/supertest": "^6.0.2",
+    "asap": "^2.0.6",
+    "asynckit": "^0.5.0",
+    "combined-stream": "^1.0.8",
+    "delayed-stream": "^1.0.0",
+    "form-data": "^4.0.6",
+    "formidable": "^3.5.4",
+    "magic-string": "^1.1.0",
+    "mime-types": "^3.0.2",
     "prisma": "^5.18.0",
+    "supertest": "^7.2.2",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "vitest": "^4.1.10"
   }
 }

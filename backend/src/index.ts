@@ -9,6 +9,7 @@ dotenv.config();
 import authRouter from './routes/auth';
 import spacesRouter from './routes/spaces';
 import tasksRouter from './routes/tasks';
+import { seedDatabase } from './seed';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -32,7 +33,17 @@ app.get('/health', (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date() });
 });
 
+// Eksporto app për teste
+export { app };
+
 // Nisja e serverit
-app.listen(PORT, () => {
-  console.log(`Serveri po punon në portën http://localhost:${PORT}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, async () => {
+    try {
+      await seedDatabase();
+    } catch (error) {
+      console.error('[Seed] Gabim gjatë inicializimit:', error);
+    }
+    console.log(`Serveri po punon në portën http://localhost:${PORT}`);
+  });
+}

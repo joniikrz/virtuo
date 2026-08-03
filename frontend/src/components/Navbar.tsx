@@ -1,5 +1,5 @@
 import React from 'react';
-import { LogOut, User, Activity } from 'lucide-react';
+import { LogOut, LayoutGrid } from 'lucide-react';
 
 interface NavbarProps {
   user: {
@@ -16,20 +16,20 @@ export default function Navbar({ user, onLogout }: NavbarProps) {
   return (
     <nav className="navbar">
       <div className="nav-brand">
-        <Activity size={24} style={{ color: 'hsl(var(--primary))' }} />
+        <div className="nav-logo-mark">V</div>
         <span className="nav-logo">Virtuo</span>
+        <LayoutGrid size={16} style={{ color: 'rgba(255,255,255,0.6)', marginLeft: 4 }} />
       </div>
 
       <div className="nav-user">
         <div className="user-badge">
-          <User size={14} />
           <span>{user.firstName} {user.lastName}</span>
           <span className={`role-tag ${user.role.toLowerCase()}`}>
-            {user.role}
+            {user.role === 'ADMIN' ? 'Admin' : 'Anëtar'}
           </span>
         </div>
 
-        <button onClick={onLogout} className="btn btn-secondary btn-sm" title="Log Out">
+        <button onClick={onLogout} className="btn btn-secondary btn-sm" title="Dil">
           <LogOut size={16} />
           <span>Dil</span>
         </button>

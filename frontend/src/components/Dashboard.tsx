@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Plus, Lock, Unlock, Calendar, Paperclip, UserPlus, 
-  FileUp, FileText, CheckCircle2, Clock, Play, X, Download
+import {
+  Plus, Lock, Calendar, Paperclip, UserPlus,
+  FileUp, FileText, CheckCircle2, Clock, Play, X, Download, Trash2
 } from 'lucide-react';
+
+const BOARD_COLORS = [
+  '#0079BF', '#D29034', '#519839', '#B04632',
+  '#89609E', '#CD5A91', '#4BBF6B', '#00AEEF', '#838C91',
+];
 
 interface User {
   id: string;
@@ -16,6 +21,7 @@ interface Space {
   id: string;
   name: string;
   description: string;
+  color: string;
   isPrivate: boolean;
   createdBy: {
     firstName: string;
@@ -39,7 +45,7 @@ interface Task {
   id: string;
   title: string;
   description: string;
-  status: string; // 'TODO' | 'IN_PROGRESS' | 'COMPLETED'
+  status: string;
   deadline: string;
   assignedTo: {
     id: string;
@@ -58,21 +64,24 @@ interface DashboardProps {
   currentUser: User;
 }
 
+function getInitials(firstName: string, lastName: string) {
+  return `${firstName[0]}${lastName[0]}`.toUpperCase();
+}
+
 export default function Dashboard({ currentUser }: DashboardProps) {
   const isAdmin = currentUser.role === 'ADMIN';
 
-  // State-et kryesore
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [activeSpace, setActiveSpace] = useState<Space | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [spaceMembers, setSpaceMembers] = useState<User[]>([]);
 
-  // State-et e modal-eve
   const [showCreateSpace, setShowCreateSpace] = useState(false);
   const [spaceName, setSpaceName] = useState('');
   const [spaceDesc, setSpaceDesc] = useState('');
   const [spacePrivate, setSpacePrivate] = useState(false);
+  const [spaceColor, setSpaceColor] = useState(BOARD_COLORS[0]);
 
   const [showInviteMember, setShowInviteMember] = useState(false);
   const [selectedInviteUser, setSelectedInviteUser] = useState('');
@@ -96,7 +105,6 @@ export default function Dashboard({ currentUser }: DashboardProps) {
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // 1. Shkarkimi i Spaces
   const fetchSpaces = async () => {
     try {
       const res = await fetch('/api/spaces');
@@ -112,9 +120,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     }
   };
 
-  // 2. Shkarkimi i të gjithë përdoruesve (vetëm për Admin)
   const fetchAllUsers = async () => {
-    if (!isAdmin) return;
     try {
       const res = await fetch('/api/auth/users');
       if (res.ok) {
@@ -126,7 +132,6 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     }
   };
 
-  // 3. Shkarkimi i detyrave për Space-in aktiv
   const fetchTasks = async (spaceId: string) => {
     try {
       const res = await fetch(`/api/spaces/${spaceId}/tasks`);
@@ -139,7 +144,6 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     }
   };
 
-  // 4. Shkarkimi i anëtarëve për Space-in aktiv
   const fetchSpaceMembers = async (spaceId: string) => {
     try {
       const res = await fetch(`/api/spaces/${spaceId}/members`);
@@ -164,7 +168,6 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     }
   }, [activeSpace]);
 
-  // Krijimi i një Space të ri
   const handleCreateSpace = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -172,7 +175,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       const res = await fetch('/api/spaces', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: spaceName, description: spaceDesc, isPrivate: spacePrivate }),
+        body: JSON.stringify({ name: spaceName, description: spaceDesc, isPrivate: spacePrivate, color: spaceColor }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -183,13 +186,30 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       setSpaceName('');
       setSpaceDesc('');
       setSpacePrivate(false);
-      setSuccessMsg('Hapësira u krijua me sukses.');
-    } catch (err: any) {
-      setErrorMsg(err.message);
+      setSpaceColor(BOARD_COLORS[0]);
+      setSuccessMsg('Bordi u krijua me sukses.');
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Gabim');
     }
   };
 
-  // Ftesa e një anëtari në Space
+  const handleDeleteSpace = async () => {
+    if (!activeSpace || !confirm(`Fshir bordin "${activeSpace.name}"?`)) return;
+    try {
+      const res = await fetch(`/api/spaces/${activeSpace.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      const remaining = spaces.filter((s) => s.id !== activeSpace.id);
+      setSpaces(remaining);
+      setActiveSpace(remaining[0] || null);
+      setTasks([]);
+      setSuccessMsg('Bordi u fshi.');
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Gabim');
+    }
+  };
+
   const handleInviteMember = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -206,13 +226,12 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       setShowInviteMember(false);
       setSelectedInviteUser('');
       fetchSpaceMembers(activeSpace.id);
-      setSuccessMsg('Anëtari u shtua me sukses në hapësirë.');
-    } catch (err: any) {
-      setErrorMsg(err.message);
+      setSuccessMsg('Anëtari u shtua në bord.');
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Gabim');
     }
   };
 
-  // Krijimi i një Task-u të ri
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -237,13 +256,12 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       setTaskDesc('');
       setTaskDeadline('');
       setTaskAssignee('');
-      setSuccessMsg('Detyra u krijua dhe u caktua me sukses.');
-    } catch (err: any) {
-      setErrorMsg(err.message);
+      setSuccessMsg('Karta u shtua në bord.');
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Gabim');
     }
   };
 
-  // Regjistrimi i përdoruesit
   const handleRegisterUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -269,13 +287,12 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       setRegLastName('');
       setRegRole('USER');
       fetchAllUsers();
-      setSuccessMsg('Llogaria e re u krijua me sukses.');
-    } catch (err: any) {
-      setErrorMsg(err.message);
+      setSuccessMsg('Përdoruesi u regjistrua.');
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Gabim');
     }
   };
 
-  // Ndryshimi i Statusit të Detyrës
   const handleStatusChange = async (taskId: string, newStatus: string) => {
     try {
       const res = await fetch(`/api/tasks/${taskId}/status`, {
@@ -284,8 +301,8 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         body: JSON.stringify({ status: newStatus }),
       });
       if (res.ok) {
-        setTasks(tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
-        if (selectedTask && selectedTask.id === taskId) {
+        setTasks(tasks.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)));
+        if (selectedTask?.id === taskId) {
           setSelectedTask({ ...selectedTask, status: newStatus });
         }
       }
@@ -294,15 +311,29 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     }
   };
 
-  // Ngarkimi i një Shtojce (Attachment)
+  const handleDeleteTask = async (taskId: string) => {
+    if (!confirm('Fshir këtë detyrë?')) return;
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error);
+      }
+      setTasks(tasks.filter((t) => t.id !== taskId));
+      setSelectedTask(null);
+      setSuccessMsg('Detyra u fshi.');
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Gabim');
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || !e.target.files[0] || !selectedTask) return;
+    if (!e.target.files?.[0] || !selectedTask) return;
     setUploadingFile(true);
     setErrorMsg('');
 
-    const file = e.target.files[0];
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', e.target.files[0]);
 
     try {
       const res = await fetch(`/api/tasks/${selectedTask.id}/attachments`, {
@@ -314,90 +345,101 @@ export default function Dashboard({ currentUser }: DashboardProps) {
 
       const updatedTask = {
         ...selectedTask,
-        attachments: [...(selectedTask.attachments || []), data]
+        attachments: [...(selectedTask.attachments || []), data],
       };
       setSelectedTask(updatedTask);
-      setTasks(tasks.map(t => t.id === selectedTask.id ? updatedTask : t));
-      setSuccessMsg('Skedari u ngarkua me sukses.');
-    } catch (err: any) {
-      setErrorMsg(err.message);
+      setTasks(tasks.map((t) => (t.id === selectedTask.id ? updatedTask : t)));
+      setSuccessMsg('Skedari u ngarkua.');
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Gabim');
     } finally {
       setUploadingFile(false);
     }
   };
 
-  const getTasksByStatus = (status: string) => {
-    return tasks.filter(t => t.status === status);
-  };
+  const getTasksByStatus = (status: string) => tasks.filter((t) => t.status === status);
+
+  const boardColor = activeSpace?.color || '#0079BF';
+
+  const renderTaskCard = (t: Task, colClass: string) => (
+    <div
+      key={t.id}
+      className={`task-card ${colClass}`}
+      onClick={() => setSelectedTask(t)}
+    >
+      <div className="task-card-labels">
+        <span className="task-label" style={{ background: boardColor }} />
+      </div>
+      <h4 className={`task-card-title ${t.status === 'COMPLETED' ? 'done' : ''}`}>{t.title}</h4>
+      {t.description && <p className="task-card-description">{t.description}</p>}
+      <div className="task-card-footer">
+        {t.assignedTo ? (
+          <span className="task-card-assignee" title={`${t.assignedTo.firstName} ${t.assignedTo.lastName}`}>
+            {getInitials(t.assignedTo.firstName, t.assignedTo.lastName)}
+          </span>
+        ) : (
+          <span />
+        )}
+        <span
+          className={`task-card-deadline ${
+            t.status === 'COMPLETED' ? 'done' : new Date(t.deadline) < new Date() ? 'danger' : 'normal'
+          }`}
+        >
+          {t.status === 'COMPLETED' ? (
+            <><CheckCircle2 size={12} /> Kryer</>
+          ) : (
+            <><Calendar size={12} />{new Date(t.deadline).toLocaleDateString('sq-AL', { month: 'short', day: 'numeric' })}</>
+          )}
+        </span>
+      </div>
+    </div>
+  );
 
   return (
     <div className="dashboard-layout">
-      {/* Sidebar-i me Spaces */}
-      <aside className="sidebar">
+      <aside className="boards-sidebar">
         <div className="sidebar-header">
-          <span className="sidebar-title">Hapësirat e Punës</span>
-          {isAdmin && (
-            <button 
-              onClick={() => setShowCreateSpace(true)} 
-              className="btn btn-secondary btn-sm" 
-              style={{ padding: '4px 8px', borderRadius: '50%' }}
-              title="Krijo Space të ri"
-            >
-              <Plus size={16} />
-            </button>
-          )}
+          <span className="sidebar-title">Bordet e Mia</span>
         </div>
 
-        <div className="space-list">
-          {spaces.map(s => (
-            <div 
-              key={s.id} 
-              className={`space-item ${activeSpace?.id === s.id ? 'active' : ''}`}
+        <div className="board-list">
+          {spaces.map((s) => (
+            <div
+              key={s.id}
+              className={`board-tile ${activeSpace?.id === s.id ? 'active' : ''}`}
+              style={{ background: s.color || '#0079BF' }}
               onClick={() => setActiveSpace(s)}
             >
-              <span className="space-item-name">
-                {s.isPrivate ? <Lock size={14} style={{ color: 'hsl(var(--accent-warning))' }} /> : <Unlock size={14} />}
-                {s.name}
-              </span>
-              {s.isPrivate && <span className="space-item-badge">Boss</span>}
+              {s.isPrivate && <span className="board-tile-badge"><Lock size={10} /> Privat</span>}
+              <span className="board-tile-name">{s.name}</span>
             </div>
           ))}
-          {spaces.length === 0 && (
-            <div className="empty-state">
-              <Unlock size={24} />
-              <span>Nuk ka asnjë hapësirë</span>
+
+          <button className="create-board-btn" onClick={() => setShowCreateSpace(true)}>
+            <Plus size={18} />
+            Krijo bord të ri
+          </button>
+        </div>
+
+        <div className="sidebar-footer">
+          {isAdmin ? (
+            <button onClick={() => setShowRegisterUser(true)} className="btn btn-light btn-sm btn-full">
+              <UserPlus size={16} />
+              Shto përdorues (Admin)
+            </button>
+          ) : (
+            <div className="user-status-card">
+              <span>Anëtar i ekipit</span>
             </div>
           )}
         </div>
-
-        {isAdmin && (
-          <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <button onClick={() => setShowRegisterUser(true)} className="btn btn-secondary btn-sm">
-              <UserPlus size={16} />
-              <span>Regjistro Punonjës</span>
-            </button>
-          </div>
-        )}
       </aside>
 
-      {/* Pjesa Kryesore */}
-      <main className="main-content">
+      <main className="board-main">
         {successMsg && (
-          <div 
-            style={{
-              backgroundColor: 'hsl(var(--accent-success) / 0.15)',
-              border: '1px solid hsl(var(--accent-success) / 0.3)',
-              color: 'hsl(var(--accent-success))',
-              padding: '12px 20px',
-              borderRadius: 'var(--border-radius-md)',
-              fontSize: '0.85rem',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}
-          >
+          <div className="alert alert-success" style={{ margin: '12px 16px 0', justifyContent: 'space-between' }}>
             <span>{successMsg}</span>
-            <button onClick={() => setSuccessMsg('')} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}>
+            <button onClick={() => setSuccessMsg('')} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
               <X size={16} />
             </button>
           </div>
@@ -405,362 +447,240 @@ export default function Dashboard({ currentUser }: DashboardProps) {
 
         {activeSpace ? (
           <>
-            <div className="content-header">
-              <div className="space-info">
+            <div className="board-header" style={{ background: boardColor }}>
+              <div className="board-header-info">
                 <h2>{activeSpace.name}</h2>
-                <p>{activeSpace.description || 'Nuk ka përshkrim për këtë hapësirë.'}</p>
-                <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginTop: '6px' }}>
-                  Anëtarë: {spaceMembers.length} | Krijuesi: {activeSpace.createdBy?.firstName} {activeSpace.createdBy?.lastName}
+                <p>{activeSpace.description || 'Menaxho detyrat në stil Trello'}</p>
+                <div className="board-header-meta">
+                  {spaceMembers.length} anëtarë · Krijuar nga {activeSpace.createdBy?.firstName} {activeSpace.createdBy?.lastName}
                 </div>
               </div>
-
-              <div style={{ display: 'flex', gap: '10px' }}>
-                {isAdmin && (
-                  <>
-                    <button onClick={() => setShowInviteMember(true)} className="btn btn-secondary">
-                      <UserPlus size={18} />
-                      <span>Fto Anëtar</span>
-                    </button>
-                    <button onClick={() => setShowCreateTask(true)} className="btn btn-primary">
-                      <Plus size={18} />
-                      <span>Shto Detyrë</span>
-                    </button>
-                  </>
+              <div className="board-header-actions">
+                <button onClick={() => setShowInviteMember(true)} className="btn btn-secondary btn-sm">
+                  <UserPlus size={16} /> Fto anëtar
+                </button>
+                <button onClick={() => setShowCreateTask(true)} className="btn btn-secondary btn-sm">
+                  <Plus size={16} /> Karta e re
+                </button>
+                {(isAdmin || activeSpace.createdBy?.firstName === currentUser.firstName) && (
+                  <button onClick={handleDeleteSpace} className="btn btn-secondary btn-sm" title="Fshi bordin">
+                    <Trash2 size={16} />
+                  </button>
                 )}
               </div>
             </div>
 
-            {/* Detyrat e ndara në 3 kolona */}
-            <div className="tasks-layout">
-              {/* TODO */}
-              <div className="task-column">
-                <div className="column-header">
-                  <span className="column-title" style={{ color: 'hsl(var(--accent-warning))' }}>
-                    <Clock size={16} />
-                    <span>Për t'u bërë</span>
-                  </span>
-                  <span className="column-count">{getTasksByStatus('TODO').length}</span>
+            <div className="board-content">
+              <div className="kanban-board">
+                <div className="kanban-column col-todo">
+                  <div className="kanban-column-header">
+                    <span className="column-title"><Clock size={14} /> Për t&apos;u bërë</span>
+                    <span className="column-count">{getTasksByStatus('TODO').length}</span>
+                  </div>
+                  <div className="kanban-cards">
+                    {getTasksByStatus('TODO').map((t) => renderTaskCard(t, 'col-todo'))}
+                  </div>
                 </div>
-                <div className="task-card-list">
-                  {getTasksByStatus('TODO').map(t => (
-                    <div key={t.id} className="task-card" onClick={() => setSelectedTask(t)}>
-                      <h4 className="task-card-title">{t.title}</h4>
-                      {t.description && <p className="task-card-description">{t.description}</p>}
-                      <div className="task-card-footer">
-                        <span className="task-card-assignee">
-                          {t.assignedTo ? `${t.assignedTo.firstName} ${t.assignedTo.lastName[0]}.` : 'I pacaktuar'}
-                        </span>
-                        <span className={`task-card-deadline ${new Date(t.deadline) < new Date() ? 'danger' : 'normal'}`}>
-                          <Calendar size={12} />
-                          {new Date(t.deadline).toLocaleDateString('sq-AL', { month: 'short', day: 'numeric' })}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
 
-              {/* IN_PROGRESS */}
-              <div className="task-column">
-                <div className="column-header">
-                  <span className="column-title" style={{ color: 'hsl(var(--primary))' }}>
-                    <Play size={16} />
-                    <span>Në proces</span>
-                  </span>
-                  <span className="column-count">{getTasksByStatus('IN_PROGRESS').length}</span>
+                <div className="kanban-column col-progress">
+                  <div className="kanban-column-header">
+                    <span className="column-title"><Play size={14} /> Në proces</span>
+                    <span className="column-count">{getTasksByStatus('IN_PROGRESS').length}</span>
+                  </div>
+                  <div className="kanban-cards">
+                    {getTasksByStatus('IN_PROGRESS').map((t) => renderTaskCard(t, 'col-progress'))}
+                  </div>
                 </div>
-                <div className="task-card-list">
-                  {getTasksByStatus('IN_PROGRESS').map(t => (
-                    <div key={t.id} className="task-card" onClick={() => setSelectedTask(t)}>
-                      <h4 className="task-card-title">{t.title}</h4>
-                      {t.description && <p className="task-card-description">{t.description}</p>}
-                      <div className="task-card-footer">
-                        <span className="task-card-assignee">
-                          {t.assignedTo ? `${t.assignedTo.firstName} ${t.assignedTo.lastName[0]}.` : 'I pacaktuar'}
-                        </span>
-                        <span className={`task-card-deadline ${new Date(t.deadline) < new Date() ? 'danger' : 'normal'}`}>
-                          <Calendar size={12} />
-                          {new Date(t.deadline).toLocaleDateString('sq-AL', { month: 'short', day: 'numeric' })}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
 
-              {/* COMPLETED */}
-              <div className="task-column">
-                <div className="column-header">
-                  <span className="column-title" style={{ color: 'hsl(var(--accent-success))' }}>
-                    <CheckCircle2 size={16} />
-                    <span>E përfunduar</span>
-                  </span>
-                  <span className="column-count">{getTasksByStatus('COMPLETED').length}</span>
-                </div>
-                <div className="task-card-list">
-                  {getTasksByStatus('COMPLETED').map(t => (
-                    <div key={t.id} className="task-card" onClick={() => setSelectedTask(t)} style={{ opacity: 0.8 }}>
-                      <h4 className="task-card-title" style={{ textDecoration: 'line-through' }}>{t.title}</h4>
-                      {t.description && <p className="task-card-description">{t.description}</p>}
-                      <div className="task-card-footer">
-                        <span className="task-card-assignee">
-                          {t.assignedTo ? `${t.assignedTo.firstName} ${t.assignedTo.lastName[0]}.` : 'I pacaktuar'}
-                        </span>
-                        <span className="task-card-deadline normal">
-                          <CheckCircle2 size={12} style={{ color: 'hsl(var(--accent-success))' }} />
-                          Kryer
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                <div className="kanban-column col-done">
+                  <div className="kanban-column-header">
+                    <span className="column-title"><CheckCircle2 size={14} /> E përfunduar</span>
+                    <span className="column-count">{getTasksByStatus('COMPLETED').length}</span>
+                  </div>
+                  <div className="kanban-cards">
+                    {getTasksByStatus('COMPLETED').map((t) => renderTaskCard(t, 'col-done'))}
+                  </div>
                 </div>
               </div>
             </div>
           </>
         ) : (
-          <div className="empty-state" style={{ margin: 'auto', maxWidth: '400px' }}>
-            <Unlock size={48} />
+          <div className="empty-state" style={{ margin: 'auto' }}>
+            <Plus size={48} />
             <h3>Mirëseerdhët në Virtuo</h3>
-            <p>Për të filluar punën, ju lutem krijoni një hapësirë të re ose zgjidhni një ekzistuese në sidebar.</p>
+            <p>{isAdmin ? 'Krijo bordin e parë ose zgjidh një nga lista.' : 'Prit të të ftojë admini në një bord.'}</p>
           </div>
         )}
       </main>
 
-      {/* MODAL: KRIJO SPACE */}
+      {/* MODAL: KRIJO BORD */}
       {showCreateSpace && (
-        <div className="modal-overlay">
-          <div className="modal-content">
+        <div className="modal-overlay" onClick={() => setShowCreateSpace(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Krijo Hapësirë të Re</h3>
+              <h3>Krijo bord të ri</h3>
               <button className="modal-close-btn" onClick={() => setShowCreateSpace(false)}>&times;</button>
             </div>
             <form onSubmit={handleCreateSpace}>
               <div className="modal-body">
-                {errorMsg && <div style={{ color: 'hsl(var(--accent-danger))', marginBottom: '15px' }}>{errorMsg}</div>}
+                {errorMsg && <div className="alert alert-error" style={{ marginBottom: 12 }}>{errorMsg}</div>}
                 <div className="form-group">
-                  <label>Emri i Hapësirës</label>
-                  <input 
-                    type="text" 
-                    className="input-field" 
-                    value={spaceName} 
-                    onChange={e => setSpaceName(e.target.value)} 
-                    placeholder="p.sh. Departamenti i Financës" 
-                    required 
-                  />
+                  <label>Emri i bordit</label>
+                  <input type="text" className="input-field" value={spaceName} onChange={(e) => setSpaceName(e.target.value)} placeholder="p.sh. Marketing" required />
                 </div>
                 <div className="form-group">
-                  <label>Përshkrimi (Opsional)</label>
-                  <textarea 
-                    className="input-field" 
-                    style={{ minHeight: '80px', resize: 'vertical' }}
-                    value={spaceDesc} 
-                    onChange={e => setSpaceDesc(e.target.value)} 
-                    placeholder="Shkruani një përshkrim të shkurtër"
-                  />
+                  <label>Përshkrimi</label>
+                  <textarea className="input-field" style={{ minHeight: 70 }} value={spaceDesc} onChange={(e) => setSpaceDesc(e.target.value)} />
                 </div>
-                <div className="form-group" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
+                <div className="form-group">
+                  <label>Ngjyra e bordit</label>
+                  <div className="color-picker">
+                    {BOARD_COLORS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        className={`color-swatch ${spaceColor === c ? 'selected' : ''}`}
+                        style={{ background: c }}
+                        onClick={() => setSpaceColor(c)}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div className="form-group" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <label style={{ display: 'block', marginBottom: '4px' }}>Hapësirë Ekzekutive Private</label>
-                    <span style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>
-                      Vetëm për Shefat/Menaxhmentin. Punonjësit nuk do ta shohin.
-                    </span>
+                    <label style={{ display: 'block' }}>Bord privat (vetëm admin)</label>
                   </div>
                   <label className="switch">
-                    <input 
-                      type="checkbox" 
-                      checked={spacePrivate} 
-                      onChange={e => setSpacePrivate(e.target.checked)} 
-                    />
-                    <span className="slider"></span>
+                    <input type="checkbox" checked={spacePrivate} onChange={(e) => setSpacePrivate(e.target.checked)} />
+                    <span className="slider" />
                   </label>
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowCreateSpace(false)}>Anulo</button>
-                <button type="submit" className="btn btn-primary">Krijo</button>
+                <button type="button" className="btn btn-light" onClick={() => setShowCreateSpace(false)}>Anulo</button>
+                <button type="submit" className="btn btn-primary">Krijo bordin</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL: FTO ANETAR */}
+      {/* MODAL: FTO ANËTAR */}
       {showInviteMember && activeSpace && (
-        <div className="modal-overlay">
-          <div className="modal-content">
+        <div className="modal-overlay" onClick={() => setShowInviteMember(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Fto Anëtar te: {activeSpace.name}</h3>
+              <h3>Fto anëtar te: {activeSpace.name}</h3>
               <button className="modal-close-btn" onClick={() => setShowInviteMember(false)}>&times;</button>
             </div>
             <form onSubmit={handleInviteMember}>
               <div className="modal-body">
-                {errorMsg && <div style={{ color: 'hsl(var(--accent-danger))', marginBottom: '15px' }}>{errorMsg}</div>}
+                {errorMsg && <div className="alert alert-error" style={{ marginBottom: 12 }}>{errorMsg}</div>}
                 <div className="form-group">
-                  <label>Zgjidh Përdoruesin</label>
-                  <select 
-                    className="input-field"
-                    value={selectedInviteUser}
-                    onChange={e => setSelectedInviteUser(e.target.value)}
-                    required
-                  >
-                    <option value="">Zgjidh një anëtar...</option>
+                  <label>Zgjidh përdoruesin</label>
+                  <select className="input-field" value={selectedInviteUser} onChange={(e) => setSelectedInviteUser(e.target.value)} required>
+                    <option value="">Zgjidh...</option>
                     {users
-                      .filter(u => !activeSpace.isPrivate || u.role === 'ADMIN')
-                      .filter(u => !spaceMembers.some(m => m.id === u.id))
-                      .map(u => (
+                      .filter((u) => !activeSpace.isPrivate || u.role === 'ADMIN')
+                      .filter((u) => !spaceMembers.some((m) => m.id === u.id))
+                      .map((u) => (
                         <option key={u.id} value={u.id}>
-                          {u.firstName} {u.lastName} ({u.email}) - [{u.role}]
+                          {u.firstName} {u.lastName} ({u.email})
                         </option>
                       ))}
                   </select>
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowInviteMember(false)}>Anulo</button>
-                <button type="submit" className="btn btn-primary">Fto Anëtar</button>
+                <button type="button" className="btn btn-light" onClick={() => setShowInviteMember(false)}>Anulo</button>
+                <button type="submit" className="btn btn-primary">Fto</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL: SHTO TASK */}
+      {/* MODAL: KARTË E RE */}
       {showCreateTask && activeSpace && (
-        <div className="modal-overlay">
-          <div className="modal-content">
+        <div className="modal-overlay" onClick={() => setShowCreateTask(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Shto Detyrë të Re</h3>
+              <h3>Shto kartë të re</h3>
               <button className="modal-close-btn" onClick={() => setShowCreateTask(false)}>&times;</button>
             </div>
             <form onSubmit={handleCreateTask}>
               <div className="modal-body">
-                {errorMsg && <div style={{ color: 'hsl(var(--accent-danger))', marginBottom: '15px' }}>{errorMsg}</div>}
+                {errorMsg && <div className="alert alert-error" style={{ marginBottom: 12 }}>{errorMsg}</div>}
                 <div className="form-group">
-                  <label>Titulli i Detyrës</label>
-                  <input 
-                    type="text" 
-                    className="input-field" 
-                    value={taskTitle} 
-                    onChange={e => setTaskTitle(e.target.value)} 
-                    placeholder="p.sh. Përgatit raportin mujor" 
-                    required 
-                  />
+                  <label>Titulli</label>
+                  <input type="text" className="input-field" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} required />
                 </div>
                 <div className="form-group">
                   <label>Përshkrimi</label>
-                  <textarea 
-                    className="input-field" 
-                    style={{ minHeight: '80px', resize: 'vertical' }}
-                    value={taskDesc} 
-                    onChange={e => setTaskDesc(e.target.value)} 
-                    placeholder="Çfarë duhet të bëhet..."
-                  />
+                  <textarea className="input-field" style={{ minHeight: 70 }} value={taskDesc} onChange={(e) => setTaskDesc(e.target.value)} />
                 </div>
                 <div className="form-group">
-                  <label>Afati i Fundit (Deadline)</label>
-                  <input 
-                    type="datetime-local" 
-                    className="input-field" 
-                    value={taskDeadline} 
-                    onChange={e => setTaskDeadline(e.target.value)} 
-                    required 
-                  />
+                  <label>Afati</label>
+                  <input type="datetime-local" className="input-field" value={taskDeadline} onChange={(e) => setTaskDeadline(e.target.value)} required />
                 </div>
                 <div className="form-group">
-                  <label>Caktoja Punonjësit (Opsional)</label>
-                  <select 
-                    className="input-field"
-                    value={taskAssignee}
-                    onChange={e => setTaskAssignee(e.target.value)}
-                  >
-                    <option value="">I pacaktuar (Asnjë)</option>
-                    {spaceMembers.map(u => (
-                      <option key={u.id} value={u.id}>
-                        {u.firstName} {u.lastName}
-                      </option>
+                  <label>Cakto te</label>
+                  <select className="input-field" value={taskAssignee} onChange={(e) => setTaskAssignee(e.target.value)}>
+                    <option value="">Pa caktuar</option>
+                    {spaceMembers.map((u) => (
+                      <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
                     ))}
                   </select>
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowCreateTask(false)}>Anulo</button>
-                <button type="submit" className="btn btn-primary">Krijo Detyrë</button>
+                <button type="button" className="btn btn-light" onClick={() => setShowCreateTask(false)}>Anulo</button>
+                <button type="submit" className="btn btn-primary">Shto kartën</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL: REGJISTRO PUNONJES */}
+      {/* MODAL: REGJISTRO PËRDORUES (Admin) */}
       {showRegisterUser && (
-        <div className="modal-overlay">
-          <div className="modal-content">
+        <div className="modal-overlay" onClick={() => setShowRegisterUser(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Regjistro Përdorues të Ri</h3>
+              <h3>Shto përdorues (Admin)</h3>
               <button className="modal-close-btn" onClick={() => setShowRegisterUser(false)}>&times;</button>
             </div>
             <form onSubmit={handleRegisterUser}>
               <div className="modal-body">
-                {errorMsg && <div style={{ color: 'hsl(var(--accent-danger))', marginBottom: '15px' }}>{errorMsg}</div>}
-                <div className="form-group">
-                  <label>Emri</label>
-                  <input 
-                    type="text" 
-                    className="input-field" 
-                    value={regFirstName} 
-                    onChange={e => setRegFirstName(e.target.value)} 
-                    placeholder="Filan" 
-                    required 
-                  />
+                {errorMsg && <div className="alert alert-error" style={{ marginBottom: 12 }}>{errorMsg}</div>}
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Emri</label>
+                    <input type="text" className="input-field" value={regFirstName} onChange={(e) => setRegFirstName(e.target.value)} required />
+                  </div>
+                  <div className="form-group">
+                    <label>Mbiemri</label>
+                    <input type="text" className="input-field" value={regLastName} onChange={(e) => setRegLastName(e.target.value)} required />
+                  </div>
                 </div>
                 <div className="form-group">
-                  <label>Mbiemri</label>
-                  <input 
-                    type="text" 
-                    className="input-field" 
-                    value={regLastName} 
-                    onChange={e => setRegLastName(e.target.value)} 
-                    placeholder="Fisteku" 
-                    required 
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Email Adresa</label>
-                  <input 
-                    type="email" 
-                    className="input-field" 
-                    value={regEmail} 
-                    onChange={e => setRegEmail(e.target.value)} 
-                    placeholder="filan@kompania.com" 
-                    required 
-                  />
+                  <label>Email</label>
+                  <input type="email" className="input-field" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} required />
                 </div>
                 <div className="form-group">
                   <label>Fjalëkalimi</label>
-                  <input 
-                    type="password" 
-                    className="input-field" 
-                    value={regPassword} 
-                    onChange={e => setRegPassword(e.target.value)} 
-                    placeholder="Fjalëkalim i sigurt..." 
-                    required 
-                  />
+                  <input type="password" className="input-field" value={regPassword} onChange={(e) => setRegPassword(e.target.value)} required />
                 </div>
                 <div className="form-group">
-                  <label>Roli i Përdoruesit</label>
-                  <select 
-                    className="input-field"
-                    value={regRole}
-                    onChange={e => setRegRole(e.target.value)}
-                    required
-                  >
-                    <option value="USER">Punonjës (User)</option>
-                    <option value="ADMIN">Menaxher / Shef (Admin)</option>
+                  <label>Roli</label>
+                  <select className="input-field" value={regRole} onChange={(e) => setRegRole(e.target.value)}>
+                    <option value="USER">Anëtar</option>
+                    <option value="ADMIN">Admin</option>
                   </select>
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowRegisterUser(false)}>Anulo</button>
+                <button type="button" className="btn btn-light" onClick={() => setShowRegisterUser(false)}>Anulo</button>
                 <button type="submit" className="btn btn-primary">Regjistro</button>
               </div>
             </form>
@@ -768,110 +688,91 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         </div>
       )}
 
-      {/* MODAL: DETAJET E TASK-UT */}
+      {/* MODAL: DETAJET E KARTËS */}
       {selectedTask && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '600px' }}>
+        <div className="modal-overlay" onClick={() => setSelectedTask(null)}>
+          <div className="modal-content" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3 style={{ textDecoration: selectedTask.status === 'COMPLETED' ? 'line-through' : 'none' }}>
                 {selectedTask.title}
               </h3>
               <button className="modal-close-btn" onClick={() => setSelectedTask(null)}>&times;</button>
             </div>
-            <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+            <div className="modal-body">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
                 <div>
-                  <span className="task-detail-label">Statusi i Detyrës</span>
-                  <div style={{ marginTop: '6px' }}>
-                    <select
-                      className="input-field"
-                      value={selectedTask.status}
-                      onChange={e => handleStatusChange(selectedTask.id, e.target.value)}
-                      style={{ padding: '6px 12px', fontSize: '0.85rem' }}
-                    >
-                      <option value="TODO">Për t'u bërë (TODO)</option>
-                      <option value="IN_PROGRESS">Në proces (IN PROGRESS)</option>
-                      <option value="COMPLETED">E përfunduar (COMPLETED)</option>
-                    </select>
-                  </div>
+                  <span className="task-detail-label">Statusi</span>
+                  <select
+                    className="input-field"
+                    value={selectedTask.status}
+                    onChange={(e) => handleStatusChange(selectedTask.id, e.target.value)}
+                    style={{ marginTop: 6 }}
+                  >
+                    <option value="TODO">Për t&apos;u bërë</option>
+                    <option value="IN_PROGRESS">Në proces</option>
+                    <option value="COMPLETED">E përfunduar</option>
+                  </select>
                 </div>
-
                 <div>
-                  <span className="task-detail-label">Afati i fundit</span>
-                  <div className="task-detail-val" style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span className="task-detail-label">Afati</span>
+                  <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Calendar size={16} />
-                    <span>
-                      {new Date(selectedTask.deadline).toLocaleString('sq-AL', {
-                        dateStyle: 'medium',
-                        timeStyle: 'short'
-                      })}
-                    </span>
+                    {new Date(selectedTask.deadline).toLocaleString('sq-AL', { dateStyle: 'medium', timeStyle: 'short' })}
                   </div>
                 </div>
               </div>
 
-              <div className="task-detail-section" style={{ marginBottom: '20px' }}>
+              <div style={{ marginBottom: 20 }}>
                 <span className="task-detail-label">Përshkrimi</span>
-                <p style={{ marginTop: '6px', fontSize: '0.95rem', color: 'hsl(var(--text-secondary))', whiteSpace: 'pre-line' }}>
-                  {selectedTask.description || 'Nuk ka përshkrim për këtë detyrë.'}
+                <p style={{ marginTop: 6, color: 'var(--trello-text-muted)' }}>
+                  {selectedTask.description || 'Pa përshkrim.'}
                 </p>
               </div>
 
-              {/* Shtojcat (Attachments) */}
-              <div className="task-detail-section">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                  <span className="task-detail-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Paperclip size={16} />
-                    <span>Skedarët e bashkëngjitur ({selectedTask.attachments?.length || 0})</span>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <span className="task-detail-label">
+                    <Paperclip size={14} style={{ marginRight: 4 }} />
+                    Bashkëngjitje ({selectedTask.attachments?.length || 0})
                   </span>
-                  
-                  <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', padding: '4px 10px' }}>
+                  <label className="btn btn-light btn-sm" style={{ cursor: 'pointer' }}>
                     <FileUp size={14} />
-                    <span>{uploadingFile ? 'Po ngarkohet...' : 'Ngarko Skedar'}</span>
+                    {uploadingFile ? 'Po ngarkohet...' : 'Ngarko'}
                     <input type="file" onChange={handleFileUpload} disabled={uploadingFile} style={{ display: 'none' }} />
                   </label>
                 </div>
-
-                <div className="attachments-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {selectedTask.attachments && selectedTask.attachments.length > 0 ? (
-                    selectedTask.attachments.map(att => (
-                      <div 
-                        key={att.id} 
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '8px 12px',
-                          backgroundColor: 'hsl(var(--bg-secondary))',
-                          borderRadius: 'var(--border-radius-sm)'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {selectedTask.attachments?.length ? (
+                    selectedTask.attachments.map((att) => (
+                      <div key={att.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--trello-column-bg)', borderRadius: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <FileText size={16} />
-                          <span style={{ fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {att.fileName}
-                          </span>
+                          <span style={{ fontSize: '0.85rem' }}>{att.fileName}</span>
                         </div>
-                        <a 
-                          href={`/api/attachments/${att.id}/download`} 
-                          download 
-                          className="btn btn-secondary btn-sm" 
-                          style={{ padding: '4px 8px' }}
+                        <a
+                          href={`/api/tasks/${selectedTask.id}/attachments/${att.id}`}
+                          download
+                          className="btn btn-light btn-sm"
                         >
                           <Download size={14} />
                         </a>
                       </div>
                     ))
                   ) : (
-                    <span style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))' }}>Nuk ka skedarë të bashkëngjitur.</span>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--trello-text-muted)' }}>Nuk ka skedarë.</span>
                   )}
                 </div>
               </div>
-
             </div>
             <div className="modal-footer">
-              <button type="button" className="btn btn-secondary" onClick={() => setSelectedTask(null)}>Mbyll</button>
+              {isAdmin && (
+                <button type="button" className="btn btn-danger btn-sm" onClick={() => handleDeleteTask(selectedTask.id)}>
+                  <Trash2 size={14} /> Fshi
+                </button>
+              )}
+              <button type="button" className="btn btn-light" onClick={() => setSelectedTask(null)} style={{ marginLeft: 'auto' }}>
+                Mbyll
+              </button>
             </div>
           </div>
         </div>

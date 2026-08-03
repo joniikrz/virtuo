@@ -80,9 +80,9 @@ router.get('/me', authenticateToken, (req: AuthRequest, res: Response): void => 
 
 /**
  * GET /api/auth/users
- * Lista e të gjithë përdoruesve (për t'i caktuar detyrat) - Vetëm për Admin/Shefa
+ * Lista e të gjithë përdoruesve (për t'i ftuar në bord apo caktuar detyra)
  */
-router.get('/users', authenticateToken, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/users', authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const users = await prisma.user.findMany({
       select: {
@@ -99,10 +99,85 @@ router.get('/users', authenticateToken, requireAdmin, async (req: AuthRequest, r
       orderBy: { firstName: 'asc' },
     });
 
-    res.json(users);
+    res.json(
+      users.map((u) => ({
+        id: u.id,
+        email: u.email,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        role: u.role.name,
+      }))
+    );
   } catch (error) {
     console.error('Fetch users error:', error);
     res.status(500).json({ error: 'Ndodhi një gabim gjatë marrjes së listës së përdoruesve' });
+  }
+});
+
+/**
+ * POST /api/auth/register
+ * Regjistrim publik për përdorues të rinj (rol USER)
+ */
+router.post('/register', async (req: Request, res: Response): Promise<void> => {
+  const { email, password, firstName, lastName } = req.body;
+
+  if (!email || !password || !firstName || !lastName) {
+    res.status(400).json({ error: 'Të gjitha fushat janë të detyrueshme' });
+    return;
+  }
+
+  if (password.length < 6) {
+    res.status(400).json({ error: 'Fjalëkalimi duhet të ketë të paktën 6 karaktere' });
+    return;
+  }
+
+  try {
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      res.status(400).json({ error: 'Ekziston një përdorues me këtë email' });
+      return;
+    }
+
+    const userRole = await prisma.role.findUnique({ where: { name: 'USER' } });
+    if (!userRole) {
+      res.status(500).json({ error: 'Roli USER nuk ekziston. Rinisni serverin.' });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const newUser = await prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        firstName,
+        lastName,
+        roleId: userRole.id,
+      },
+      include: { role: true },
+    });
+
+    const token = jwt.sign({ userId: newUser.id }, JWT_SECRET, { expiresIn: '7d' });
+
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    res.status(201).json({
+      message: 'Regjistrimi u krye me sukses',
+      user: {
+        id: newUser.id,
+        email: newUser.email,
+        firstName: newUser.firstName,
+        lastName: newUser.lastName,
+        role: newUser.role.name,
+      },
+    });
+  } catch (error) {
+    console.error('Register error:', error);
+    res.status(500).json({ error: 'Ndodhi një gabim gjatë regjistrimit' });
   }
 });
 
