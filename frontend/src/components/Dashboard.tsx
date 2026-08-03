@@ -392,7 +392,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
               borderRadius: 'var(--border-radius-md)',
               fontSize: '0.85rem',
               display: 'flex',
-              justify: 'space-between',
+              justifyContent: 'space-between',
               alignItems: 'center'
             }}
           >
@@ -841,7 +841,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                         style={{
                           display: 'flex',
                           alignItems: 'center',
-                          justify: 'space-between',
+                          justifyContent: 'space-between',
                           padding: '8px 12px',
                           backgroundColor: 'hsl(var(--bg-secondary))',
                           borderRadius: 'var(--border-radius-sm)'
