@@ -18,7 +18,11 @@ const JWT_SECRET = process.env.JWT_SECRET || 'virtuo-super-secret-key-12345';
  * Middleware për autentikimin e përdoruesit përmes JWT.
  * Kontrollon fillimisht Cookie-n e sigurt HTTP-Only, pastaj header-in Authorization.
  */
-export async function authenticateToken(req: AuthRequest, res: Response, next: NextFunction): Promise<any> {
+export async function authenticateToken(
+  req: AuthRequest, 
+  res: Response, 
+  next: NextFunction
+): Promise<void> {
   let token = req.cookies?.token;
 
   if (!token && req.headers.authorization) {
@@ -29,7 +33,8 @@ export async function authenticateToken(req: AuthRequest, res: Response, next: N
   }
 
   if (!token) {
-    return res.status(401).json({ error: 'Mungon tokeni i autentikimit (Qasje e paautorizuar)' });
+    res.status(401).json({ error: 'Mungon tokeni i autentikimit (Qasje e paautorizuar)' });
+    return;
   }
 
   try {
@@ -42,7 +47,8 @@ export async function authenticateToken(req: AuthRequest, res: Response, next: N
     });
 
     if (!user) {
-      return res.status(401).json({ error: 'Përdoruesi nuk ekziston më në sistem' });
+      res.status(401).json({ error: 'Përdoruesi nuk ekziston më në sistem' });
+      return;
     }
 
     req.user = {
@@ -53,18 +59,19 @@ export async function authenticateToken(req: AuthRequest, res: Response, next: N
       lastName: user.lastName,
     };
 
-    return next(); // ✅ Ndryshuar: Shtuar 'return'
-  } catch (_error) { // ✅ Ndryshuar: _error me vizë poshtë që të mos ankohet TS6133
-    return res.status(403).json({ error: 'Token i pavlefshëm ose i skaduar' });
+    next();
+  } catch (_error) {
+    res.status(403).json({ error: 'Token i pavlefshëm ose i skaduar' });
   }
 }
 
 /**
  * Middleware që lejon qasjen vetëm për rolin ADMIN (Shefat/Menaxherët).
  */
-export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction): any {
+export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction): void {
   if (!req.user || req.user.role !== 'ADMIN') {
-    return res.status(403).json({ error: 'Nuk keni privilegje të mjaftueshme për këtë veprim (Kërkohet rolin Admin)' });
+    res.status(403).json({ error: 'Nuk keni privilegje të mjaftueshme për këtë veprim (Kërkohet rolin Admin)' });
+    return;
   }
-  return next(); // ✅ Ndryshuar: Shtuar 'return'
+  next();
 }
