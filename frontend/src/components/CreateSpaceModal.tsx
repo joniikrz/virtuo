@@ -4,13 +4,12 @@ import { User } from '../types';
 interface CreateSpaceModalProps {
   users: User[];
   onClose: () => void;
-  onSubmit: (name: string, desc: string, memberIds: string[]) => Promise<void>;
+  onSubmit: (name: string, memberIds: string[]) => Promise<void>;
   errorMsg: string;
 }
 
 export default function CreateSpaceModal({ users, onClose, onSubmit, errorMsg }: CreateSpaceModalProps) {
   const [spaceName, setSpaceName] = useState('');
-  const [spaceDesc, setSpaceDesc] = useState('');
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const allSelected = useMemo(() => users.length > 0 && memberIds.length === users.length, [memberIds, users]);
 
@@ -19,7 +18,7 @@ export default function CreateSpaceModal({ users, onClose, onSubmit, errorMsg }:
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(spaceName, spaceDesc, memberIds);
+    onSubmit(spaceName, memberIds);
   };
 
   return (
@@ -35,10 +34,6 @@ export default function CreateSpaceModal({ users, onClose, onSubmit, errorMsg }:
             <div className="form-group">
               <label>Emri i Hapësirës</label>
               <input type="text" className="input-field" value={spaceName} onChange={(e) => setSpaceName(e.target.value)} placeholder="p.sh. Marketing" required />
-            </div>
-            <div className="form-group">
-              <label>Përshkrimi (opsional)</label>
-              <textarea className="input-field" style={{ minHeight: '72px', resize: 'vertical' }} value={spaceDesc} onChange={(e) => setSpaceDesc(e.target.value)} placeholder="Çfarë punohet në këtë hapësirë?" />
             </div>
             <div className="form-group">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '12px' }}>

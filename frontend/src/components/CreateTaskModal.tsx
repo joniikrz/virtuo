@@ -104,23 +104,6 @@ export default function CreateTaskModal({ activeSpace, spaceMembers, onClose, on
               </select>
             </div>
 
-            <div className="form-group" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '4px' }}>E dukshme për të gjithë</label>
-                <span style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>
-                  A munden anëtarët e tjerë ta shohin këtë detyrë?
-                </span>
-              </div>
-              <label className="switch">
-                <input 
-                  type="checkbox" 
-                  checked={visibleToAll} 
-                  onChange={e => setVisibleToAll(e.target.checked)} 
-                />
-                <span className="slider"></span>
-              </label>
-            </div>
-
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Anulo</button>

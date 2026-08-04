@@ -7,10 +7,11 @@ interface InviteMemberModalProps {
   spaceMembers: User[];
   onClose: () => void;
   onSubmit: (userId: string) => Promise<void>;
+  onRemove: (userId: string) => Promise<void>;
   errorMsg: string;
 }
 
-export default function InviteMemberModal({ activeSpace, users, spaceMembers, onClose, onSubmit, errorMsg }: InviteMemberModalProps) {
+export default function InviteMemberModal({ activeSpace, users, spaceMembers, onClose, onSubmit, onRemove, errorMsg }: InviteMemberModalProps) {
   const [selectedInviteUser, setSelectedInviteUser] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -38,7 +39,6 @@ export default function InviteMemberModal({ activeSpace, users, spaceMembers, on
               >
                 <option value="">Zgjidh një anëtar...</option>
                 {users
-                  .filter(u => !activeSpace.isPrivate || u.role === 'ADMIN')
                   .filter(u => !spaceMembers.some(m => m.id === u.id))
                   .map(u => (
                     <option key={u.id} value={u.id}>
@@ -46,6 +46,17 @@ export default function InviteMemberModal({ activeSpace, users, spaceMembers, on
                     </option>
                   ))}
               </select>
+            </div>
+            <div className="form-group">
+              <label>Anëtarët aktualë ({spaceMembers.length})</label>
+              <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid hsl(var(--border))', borderRadius: 'var(--border-radius-md)', padding: '4px 10px' }}>
+                {spaceMembers.map((member) => (
+                  <div key={member.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', padding: '8px 0', borderBottom: '1px solid hsl(var(--border) / 0.5)' }}>
+                    <span>{member.firstName} {member.lastName}</span>
+                    {member.id !== activeSpace.createdBy?.id && <button type="button" className="btn btn-secondary btn-sm" onClick={() => onRemove(member.id)}>Hiq</button>}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
           <div className="modal-footer">

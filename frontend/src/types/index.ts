@@ -9,7 +9,6 @@ export interface User {
 export interface Space {
   id: string;
   name: string;
-  description: string;
   isPrivate: boolean;
   createdBy: {
     id?: string;
@@ -50,10 +49,10 @@ export interface Task {
   status: string;
   priority: string; // LOW, NORMAL, HIGH, URGENT
   deadline: string;
-  visibleToAll: boolean;
   assignedTo: { id: string; email: string; firstName: string; lastName: string; } | null;
   createdBy: { id?: string; firstName: string; lastName: string; };
   attachments: Attachment[];
+  comments: Comment[];
   tags: { id: string; tag: { id: string; name: string; color: string; } }[];
   _count?: { comments: number; };
 }

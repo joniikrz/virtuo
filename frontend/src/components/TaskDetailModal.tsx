@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Calendar, Paperclip, FileUp, FileText, Download, Edit } from 'lucide-react';
 import { Task } from '../types';
+import CommentsSection from './CommentsSection';
 
 interface TaskDetailModalProps {
   task: Task;
@@ -10,6 +11,7 @@ interface TaskDetailModalProps {
   onFileUpload: (taskId: string, file: File) => Promise<void>;
   uploadingFile: boolean;
   onEditClick: () => void;
+  onAddComment: (taskId: string, content: string) => Promise<void>;
 }
 
 export default function TaskDetailModal({ 
@@ -19,7 +21,8 @@ export default function TaskDetailModal({
   onStatusChange, 
   onFileUpload, 
   uploadingFile,
-  onEditClick
+  onEditClick,
+  onAddComment
 }: TaskDetailModalProps) {
   
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -153,6 +156,8 @@ export default function TaskDetailModal({
               )}
             </div>
           </div>
+
+          <CommentsSection comments={task.comments || []} onAddComment={(content) => onAddComment(task.id, content)} />
 
         </div>
         <div className="modal-footer">

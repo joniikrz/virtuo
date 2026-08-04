@@ -107,20 +107,6 @@ export default function EditTaskModal({ task, spaceMembers, onClose, onSubmit, e
               </select>
             </div>
 
-            <div className="form-group" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '4px' }}>E dukshme për të gjithë</label>
-              </div>
-              <label className="switch">
-                <input 
-                  type="checkbox" 
-                  checked={visibleToAll} 
-                  onChange={e => setVisibleToAll(e.target.checked)} 
-                />
-                <span className="slider"></span>
-              </label>
-            </div>
-
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Anulo</button>

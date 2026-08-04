@@ -51,7 +51,8 @@ async function taskAccess(taskId: string, userId: string, role: string) {
   const isCreator = task.createdById === userId;
   const isAssignee = task.assignedToId === userId;
   const canManage = role === 'ADMIN' || access.isOwner || isCreator;
-  return { task, canView: access.canView, canManage, canChangeStatus: canManage || isAssignee };
+  const canView = access.canView && (role === 'ADMIN' || isCreator || isAssignee);
+  return { task, canView, canManage, canChangeStatus: canManage || isAssignee };
 }
 
 async function createAssignmentNotification(task: any) {
@@ -79,7 +80,10 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
     if (spaceId) {
       const access = await spaceAccess(spaceId, userId, role);
       if (!access.canView) return res.status(403).json({ error: 'Nuk keni leje për këtë hapësirë' });
-      return res.json(await prisma.task.findMany({ where: { spaceId }, include: taskInclude, orderBy: { createdAt: 'desc' } }));
+      const taskFilter = role === 'ADMIN'
+        ? { spaceId }
+        : { spaceId, OR: [{ createdById: userId }, { assignedToId: userId }] };
+      return res.json(await prisma.task.findMany({ where: taskFilter, include: taskInclude, orderBy: { createdAt: 'desc' } }));
     }
     return res.json(await prisma.task.findMany({ where: { assignedToId: userId }, include: taskInclude, orderBy: { createdAt: 'desc' } }));
   } catch (error) { console.error('Fetch tasks error:', error); return res.status(500).json({ error: 'Gabim gjatë marrjes së detyrave' }); }
@@ -99,7 +103,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
     const access = await spaceAccess(spaceId, userId, role);
     if (!(role === 'ADMIN' || access.isMember)) return res.status(403).json({ error: 'Duhet të jeni anëtar i hapësirës për të krijuar detyra' });
     if (assignedToId && !(await prisma.spaceMember.findUnique({ where: { spaceId_userId: { spaceId, userId: assignedToId } } }))) return res.status(400).json({ error: 'Përdoruesi i caktuar duhet të jetë anëtar i hapësirës' });
-    const task = await prisma.task.create({ data: { title: title.trim(), description, status, priority, deadline: parsedDeadline, spaceId, createdById: userId, assignedToId: assignedToId || null, visibleToAll: true }, include: taskInclude });
+    const task = await prisma.task.create({ data: { title: title.trim(), description, status, priority, deadline: parsedDeadline, spaceId, createdById: userId, assignedToId: assignedToId || null }, include: taskInclude });
     await createAssignmentNotification(task);
     return res.status(201).json(task);
   } catch (error) { console.error('Create task error:', error); return res.status(500).json({ error: 'Gabim gjatë krijimit të detyrës' }); }

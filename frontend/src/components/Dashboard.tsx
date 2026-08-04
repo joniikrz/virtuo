@@ -21,6 +21,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [activeSpace, setActiveSpace] = useState<Space | null>(null);
   const canManageActiveSpace = Boolean(activeSpace && (isAdmin || activeSpace.createdBy?.id === currentUser.id));
+  const canCreateTask = Boolean(activeSpace && (isAdmin || spaceMembers.some((member) => member.id === currentUser.id)));
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [spaceMembers, setSpaceMembers] = useState<User[]>([]);
@@ -50,7 +51,6 @@ export default function Dashboard({ currentUser }: DashboardProps) {
   };
 
   const fetchAllUsers = async () => {
-    if (!isAdmin) return;
     try {
       const res = await fetch('/api/auth/users');
       if (res.ok) {
@@ -93,13 +93,13 @@ export default function Dashboard({ currentUser }: DashboardProps) {
   }, [activeSpace]);
 
   // Handlers
-  const handleCreateSpace = async (name: string, desc: string, isPrivate: boolean) => {
+  const handleCreateSpace = async (name: string, memberIds: string[]) => {
     setErrorMsg('');
     try {
       const res = await fetch('/api/spaces', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, description: desc, isPrivate }),
+        body: JSON.stringify({ name, memberIds }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -238,6 +238,34 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     }
   };
 
+  const handleRemoveMember = async (userId: string) => {
+    if (!activeSpace) return;
+    setErrorMsg('');
+    try {
+      const res = await fetch(`/api/spaces/${activeSpace.id}/members/${userId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      await fetchSpaceMembers(activeSpace.id);
+      setSuccessMsg('Anëtari u hoq nga hapësira.');
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    }
+  };
+
+  const handleAddComment = async (taskId: string, content: string) => {
+    setErrorMsg('');
+    const res = await fetch(`/api/tasks/${taskId}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Komenti nuk u ruajt');
+    const updateTask = (task: Task) => task.id === taskId ? { ...task, comments: [...(task.comments || []), data] } : task;
+    setTasks((current) => current.map(updateTask));
+    setSelectedTask((current) => current && updateTask(current));
+  };
+
   return (
     <div className="dashboard-layout" style={{ display: 'flex', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
       
@@ -276,23 +304,20 @@ export default function Dashboard({ currentUser }: DashboardProps) {
             <div className="content-header" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div className="space-info">
                 <h2 style={{ marginBottom: '8px' }}>{activeSpace.name}</h2>
-                <p style={{ color: 'hsl(var(--text-secondary))', marginBottom: '8px' }}>
-                  {activeSpace.description || 'Nuk ka përshkrim për këtë hapësirë.'}
-                </p>
                 <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))' }}>
-                  Anëtarë: {spaceMembers.length} | Krijuesi: {activeSpace.createdBy?.firstName} {activeSpace.createdBy?.lastName}
+                  Hapësirë private · Anëtarë: {spaceMembers.length} | Krijuesi: {activeSpace.createdBy?.firstName} {activeSpace.createdBy?.lastName}
                 </div>
               </div>
 
               <div style={{ display: 'flex', gap: '10px' }}>
                 <>
-                  {isAdmin && (
+                  {canManageActiveSpace && (
                     <button onClick={() => { setErrorMsg(''); setShowInviteMember(true); }} className="btn btn-secondary">
                       <UserPlus size={18} />
                       <span>Fto Anëtar</span>
                     </button>
                   )}
-                  {canManageActiveSpace && (
+                  {canCreateTask && (
                     <button onClick={() => { setErrorMsg(''); setShowCreateTask(true); }} className="btn btn-primary">
                       <Plus size={18} />
                       <span>Shto Detyrë</span>
@@ -324,6 +349,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       {/* Modals */}
       {showCreateSpace && (
         <CreateSpaceModal 
+          users={users}
           onClose={() => setShowCreateSpace(false)} 
           onSubmit={handleCreateSpace} 
           errorMsg={errorMsg} 
@@ -337,6 +363,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
           spaceMembers={spaceMembers}
           onClose={() => setShowInviteMember(false)}
           onSubmit={handleInviteMember}
+          onRemove={handleRemoveMember}
           errorMsg={errorMsg}
         />
       )}
@@ -377,6 +404,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
           onStatusChange={handleStatusChange}
           onFileUpload={handleFileUpload}
           uploadingFile={uploadingFile}
+          onAddComment={handleAddComment}
           onEditClick={() => {
             setErrorMsg('');
             setShowEditTask(true);
