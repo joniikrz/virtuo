@@ -99,7 +99,7 @@ router.get('/me', authenticateToken, (req: AuthRequest, res: Response): void => 
  * GET /api/auth/users
  * Lista e të gjithë përdoruesve
  */
-router.get('/users', authenticateToken, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/users', authenticateToken, async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
     const users = await prisma.user.findMany({
       select: {

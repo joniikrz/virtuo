@@ -15,7 +15,6 @@ export default function CreateTaskModal({ activeSpace, spaceMembers, onClose, on
   const [taskDeadline, setTaskDeadline] = useState('');
   const [taskAssignee, setTaskAssignee] = useState('');
   const [taskPriority, setTaskPriority] = useState('NORMAL');
-  const [visibleToAll, setVisibleToAll] = useState(true);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +24,6 @@ export default function CreateTaskModal({ activeSpace, spaceMembers, onClose, on
       deadline: taskDeadline,
       assignedToId: taskAssignee || null,
       priority: taskPriority,
-      visibleToAll: visibleToAll,
     });
   };
 

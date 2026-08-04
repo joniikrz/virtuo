@@ -53,7 +53,6 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
                 },
               },
             },
-            { isPrivate: false },
           ],
         },
         include: {
@@ -84,7 +83,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
  * Krijimi i një Space të ri me Transaction
  */
 router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
-  const { name, description, isPrivate, color } = req.body;
+  const { name, description, isPrivate, color, memberIds } = req.body;
   const creatorId = req.user?.id;
 
   if (!name) {
@@ -97,27 +96,36 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 
   const boardColors = ['#0079BF', '#D29034', '#519839', '#B04632', '#89609E', '#CD5A91', '#4BBF6B', '#00AEEF', '#838C91'];
   const spaceColor = boardColors.includes(color) ? color : '#0079BF';
+  const requestedMemberIds = Array.isArray(memberIds)
+    ? [...new Set(memberIds.filter((id): id is string => typeof id === 'string' && id.length > 0))]
+    : [];
 
   try {
+    if (requestedMemberIds.length) {
+      const foundUsers = await prisma.user.count({ where: { id: { in: requestedMemberIds } } });
+      if (foundUsers !== requestedMemberIds.length) {
+        return res.status(400).json({ error: 'NjÃ« ose mÃ« shumÃ« pÃ«rdorues tÃ« zgjedhur nuk ekzistojnÃ«' });
+      }
+    }
     const result = await prisma.$transaction(async (tx) => {
       const newSpace = await tx.space.create({
         data: {
           name,
           description,
           color: spaceColor,
-          isPrivate: isPrivate === true || isPrivate === 'true',
+          isPrivate: isPrivate === true || isPrivate === 'true' || requestedMemberIds.length === 0,
           createdById: creatorId,
         },
       });
 
-      await tx.spaceMember.create({
-        data: {
-          spaceId: newSpace.id,
-          userId: creatorId,
-        },
+      await tx.spaceMember.createMany({
+        data: [...new Set([creatorId, ...requestedMemberIds])].map((userId) => ({ spaceId: newSpace.id, userId })),
       });
 
-      return newSpace;
+      return tx.space.findUnique({
+        where: { id: newSpace.id },
+        include: { createdBy: { select: { id: true, firstName: true, lastName: true } }, _count: { select: { members: true, tasks: true } } },
+      });
     });
 
     return res.status(201).json(result);

@@ -20,7 +20,6 @@ export default function EditTaskModal({ task, spaceMembers, onClose, onSubmit, e
   const [taskDeadline, setTaskDeadline] = useState(formatForInput(task.deadline));
   const [taskAssignee, setTaskAssignee] = useState(task.assignedTo?.id || '');
   const [taskPriority, setTaskPriority] = useState(task.priority || 'NORMAL');
-  const [visibleToAll, setVisibleToAll] = useState(task.visibleToAll !== undefined ? task.visibleToAll : true);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +29,6 @@ export default function EditTaskModal({ task, spaceMembers, onClose, onSubmit, e
       deadline: taskDeadline,
       assignedToId: taskAssignee || null,
       priority: taskPriority,
-      visibleToAll: visibleToAll,
     });
   };
 
