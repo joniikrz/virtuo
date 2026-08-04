@@ -82,6 +82,6 @@ describe('Auth Endpoints API Tests', () => {
       .set('Cookie', ['token=mocktoken']);
 
     // Sepse jwt token mund të dështojë me mock secret, do kontrollojmë statusin 401 ose 200
-    expect([200, 401]).toContain(res.status);
+    expect(res.status).toBe(403);
   });
 });

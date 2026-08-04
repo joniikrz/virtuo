@@ -22,13 +22,10 @@ WORKDIR /app
 
 RUN apk add --no-cache openssl libc6-compat
 
-COPY package*.json ./
-RUN npm install --only=production
-
+COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
-COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 
 EXPOSE 5000
 
-CMD ["node", "dist/index.js"]
+CMD ["sh", "-c", "npx prisma db push --skip-generate && node dist/index.js"]

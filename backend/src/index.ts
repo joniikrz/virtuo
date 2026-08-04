@@ -22,19 +22,28 @@ app.use(cors({
   credentials: true, // Lejon kalimin e cookies
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 
 // Montimi i rrugëve (Routes)
 app.use('/api/auth', authRouter);
 app.use('/api/spaces', spacesRouter);
-app.use('/api', tasksRouter);
+app.use('/api/spaces/:spaceId/tasks', tasksRouter);
+app.use('/api/tasks', tasksRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api', tagsRouter);
 
 // Një rrugë bazë për të kontrolluar statusin e serverit
 app.get('/health', (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date() });
+});
+
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if (err.name === 'MulterError') {
+    return res.status(400).json({ error: 'Ngarkimi i skedarit dështoi: ' + err.message });
+  }
+  console.error('Unhandled error:', err);
+  return res.status(500).json({ error: 'Ndodhi një gabim i papritur në server' });
 });
 
 // Eksporto app për teste

@@ -5,23 +5,28 @@ services:
     restart: always
     environment:
       POSTGRES_USER: virtuo
-      POSTGRES_PASSWORD: yourpassword
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: virtuo
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
   backend:
     build: ./backend
     container_name: virtuo-backend
     restart: always
     environment:
-      DATABASE_URL: "postgresql://virtuo:yourpassword@db:5432/virtuo?schema=public"
-      JWT_SECRET: "virtuo-super-secret-key-12345"
-      ADMIN_EMAIL: "admin@virtuo.local"
-      ADMIN_PASSWORD: "Admin123!"
-      FRONTEND_URL: "http://localhost"
+      DATABASE_URL: "postgresql://virtuo:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/virtuo?schema=public"
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@virtuo.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      UPLOAD_DIR: /app/uploads
     depends_on:
       - db
+    volumes:
+      - uploads_data:/app/uploads
 
   frontend:
     build: ./frontend
@@ -31,3 +36,7 @@ services:
       - "80:80"
     depends_on:
       - backend
+
+volumes:
+  postgres_data:
+  uploads_data:

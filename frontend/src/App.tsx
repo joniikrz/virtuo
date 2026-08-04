@@ -13,9 +13,11 @@ export interface User {
 
 export interface NotificationItem {
   id: string;
+  type: string;
   title: string;
   message: string;
   isRead: boolean;
+  taskId: string | null;
   createdAt: string;
 }
 
@@ -53,7 +55,7 @@ export default function App() {
       const res = await fetch('/api/notifications', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
-        setNotifications(data);
+        setNotifications(data.notifications || []);
       }
     } catch (err) {
       console.error('Gabim gjatë leximit të njoftimeve:', err);
@@ -92,7 +94,7 @@ export default function App() {
 
     try {
       await fetch(`/api/notifications/${id}/read`, {
-        method: 'PUT',
+        method: 'PATCH',
         credentials: 'include',
       });
     } catch (error) {
@@ -106,7 +108,7 @@ export default function App() {
 
     try {
       await fetch('/api/notifications/read-all', {
-        method: 'PUT',
+        method: 'PATCH',
         credentials: 'include',
       });
     } catch (error) {

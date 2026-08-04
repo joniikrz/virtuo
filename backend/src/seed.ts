@@ -13,6 +13,9 @@ const DEFAULT_ADMIN = {
  * Kredencialet mund të mbishkruhen me variabla mjedisi.
  */
 export async function seedDatabase(): Promise<void> {
+  if (process.env.NODE_ENV === 'production' && !process.env.ADMIN_PASSWORD) {
+    throw new Error('ADMIN_PASSWORD duhet të vendoset në production');
+  }
   const adminRole = await prisma.role.upsert({
     where: { name: 'ADMIN' },
     update: {},

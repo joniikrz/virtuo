@@ -2,6 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import prisma from '../prisma';
 
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET duhet të vendoset në production');
+}
 const JWT_SECRET = process.env.JWT_SECRET || 'virtuo-dev-secret-do-not-use-in-production';
 
 export interface AuthRequest extends Request {

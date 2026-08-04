@@ -6,6 +6,9 @@ import { authenticateToken, requireAdmin, AuthRequest } from '../middleware/auth
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET;
+if (process.env.NODE_ENV === 'production' && !JWT_SECRET) {
+  throw new Error('JWT_SECRET duhet të vendoset në production');
+}
 if (!JWT_SECRET) {
   console.warn('WARNING: JWT_SECRET is not set. Using a default key for development only.');
 }
@@ -96,7 +99,7 @@ router.get('/me', authenticateToken, (req: AuthRequest, res: Response): void => 
  * GET /api/auth/users
  * Lista e të gjithë përdoruesve
  */
-router.get('/users', authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/users', authenticateToken, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const users = await prisma.user.findMany({
       select: {

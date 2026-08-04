@@ -123,6 +123,22 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: var(--shadow-premium), var(--shadow-glow);
 }
 
+.auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin-bottom: 24px; background: hsl(var(--bg-surface)); border: 1px solid hsl(var(--border-muted)); border-radius: var(--border-radius-md); }
+.auth-tab { border: 0; border-radius: 7px; padding: 10px; cursor: pointer; color: hsl(var(--text-secondary)); background: transparent; font: inherit; font-weight: 600; transition: var(--transition-fast); }
+.auth-tab:hover { color: hsl(var(--text-primary)); }
+.auth-tab.active { color: white; background: hsl(var(--primary)); box-shadow: 0 3px 10px hsl(var(--primary) / .25); }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.form-label-row span { color: hsl(var(--text-muted)); font-size: .75rem; }
+.password-field { position: relative; }
+.password-field .input-field { padding-right: 48px; }
+.password-toggle { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); border: 0; background: transparent; color: hsl(var(--text-muted)); cursor: pointer; padding: 8px; display: inline-flex; }
+.password-toggle:hover { color: hsl(var(--text-primary)); }
+.btn-full { width: 100%; min-height: 46px; }
+.alert { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; margin-bottom: 18px; border-radius: var(--border-radius-sm); font-size: .9rem; }
+.alert-error { color: hsl(var(--accent-danger)); background: hsl(var(--accent-danger) / .12); border: 1px solid hsl(var(--accent-danger) / .25); }
+.auth-hint { margin-top: 20px; color: hsl(var(--text-muted)); font-size: .82rem; line-height: 1.5; text-align: center; }
+
 .logo-header {
   text-align: center;
   margin-bottom: 30px;
@@ -808,6 +824,8 @@ body.light-mode {
 .member-checkbox-item input[type='checkbox'] { accent-color: hsl(var(--primary)); width: 16px; height: 16px; }
 
 @media (max-width: 768px) {
+  .auth-card { padding: 28px 22px; }
+  .form-row { grid-template-columns: 1fr; gap: 0; }
   .dashboard-layout { flex-direction: column; }
   .sidebar { width: 100%; max-height: none; border-right: none; border-bottom: 1px solid hsl(var(--border-muted)); padding: 16px; }
   .sidebar.collapsed { display: none; }

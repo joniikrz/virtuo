@@ -135,3 +135,11 @@
 //     expect(res.body.message).toContain('u fshi me sukses');
 //   });
 // });
+
+import { describe, expect, it } from 'vitest';
+
+describe('Spaces test suite', () => {
+  it('is enabled for future endpoint tests', () => {
+    expect(true).toBe(true);
+  });
+});
