@@ -14,9 +14,9 @@ export default function TaskBoard({ tasks, onTaskClick }: TaskBoardProps) {
   return (
     <div className="tasks-layout">
       {/* TODO */}
-      <div className="task-column">
+      <div className="task-column task-column--todo">
         <div className="column-header">
-          <span className="column-title" style={{ color: 'hsl(var(--accent-warning))' }}>
+          <span className="column-title">
             <Clock size={16} />
             <span>Për t'u bërë</span>
           </span>
@@ -30,9 +30,9 @@ export default function TaskBoard({ tasks, onTaskClick }: TaskBoardProps) {
       </div>
 
       {/* IN_PROGRESS */}
-      <div className="task-column">
+      <div className="task-column task-column--progress">
         <div className="column-header">
-          <span className="column-title" style={{ color: 'hsl(var(--primary))' }}>
+          <span className="column-title">
             <Play size={16} />
             <span>Në proces</span>
           </span>
@@ -46,9 +46,9 @@ export default function TaskBoard({ tasks, onTaskClick }: TaskBoardProps) {
       </div>
 
       {/* COMPLETED */}
-      <div className="task-column">
+      <div className="task-column task-column--completed">
         <div className="column-header">
-          <span className="column-title" style={{ color: 'hsl(var(--accent-success))' }}>
+          <span className="column-title">
             <CheckCircle2 size={16} />
             <span>E përfunduar</span>
           </span>

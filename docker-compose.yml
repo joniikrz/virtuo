@@ -11,6 +11,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U virtuo -d virtuo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   backend:
     build: ./backend
@@ -24,7 +29,8 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
       UPLOAD_DIR: /app/uploads
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     volumes:
       - uploads_data:/app/uploads
 

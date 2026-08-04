@@ -55,8 +55,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     <main className="auth-wrapper">
       <section className="auth-card" aria-labelledby="auth-title">
         <div className="logo-header">
-          <div className="trello-logo-mark" aria-hidden="true">V</div>
-          <h1 id="auth-title">Virtuo</h1>
+          <img className="auth-logo" src="/assets/virtuo-logo.png" alt="Virtuo" />
+          <h1 id="auth-title" className="sr-only">Virtuo</h1>
           <p>{isRegister ? 'Krijo një hapësirë të sigurt për ekipin tënd.' : 'Mirë se erdhe përsëri në hapësirën tënde të punës.'}</p>
         </div>
 

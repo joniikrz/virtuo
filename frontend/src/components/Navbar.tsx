@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LogOut, User as UserIcon, Activity, Bell } from 'lucide-react';
+import { LogOut, User as UserIcon, Bell } from 'lucide-react';
 import { User, Notification } from '../types';
 import NotificationsPanel from './NotificationsPanel';
 import ThemeToggle from './ThemeToggle';
@@ -23,8 +23,7 @@ export default function Navbar({ user, onLogout, notifications, onMarkAsRead, on
     <>
       <nav className="navbar" style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', padding: '12px 24px', backgroundColor: 'hsl(var(--bg-secondary))', borderBottom: '1px solid hsl(var(--border))' }}>
         <div className="nav-brand" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '1.25rem' }}>
-          <Activity size={24} style={{ color: 'hsl(var(--primary))' }} />
-          <span className="nav-logo">Virtuo</span>
+          <img className="nav-logo-image" src="/assets/virtuo-logo.png" alt="Virtuo" />
         </div>
 
         <div className="nav-user" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
