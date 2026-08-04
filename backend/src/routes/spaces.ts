@@ -25,6 +25,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
         include: {
           createdBy: {
             select: {
+              id: true,
               firstName: true,
               lastName: true,
               email: true,
@@ -58,6 +59,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
         include: {
           createdBy: {
             select: {
+              id: true,
               firstName: true,
               lastName: true,
             },

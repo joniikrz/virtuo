@@ -12,6 +12,7 @@ export interface Space {
   description: string;
   isPrivate: boolean;
   createdBy: {
+    id?: string;
     firstName: string;
     lastName: string;
   };
@@ -51,7 +52,7 @@ export interface Task {
   deadline: string;
   visibleToAll: boolean;
   assignedTo: { id: string; email: string; firstName: string; lastName: string; } | null;
-  createdBy: { firstName: string; lastName: string; };
+  createdBy: { id?: string; firstName: string; lastName: string; };
   attachments: Attachment[];
   tags: { id: string; tag: { id: string; name: string; color: string; } }[];
   _count?: { comments: number; };

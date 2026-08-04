@@ -23,11 +23,11 @@ export default function SpaceSidebar({
     <aside className="sidebar">
       <div className="sidebar-header">
         <span className="sidebar-title">Hapësirat e Punës</span>
-        {isAdmin && (
+        {true && (
           <button 
             onClick={onShowCreateSpace} 
-            className="btn btn-secondary btn-sm" 
-            style={{ padding: '4px 8px', borderRadius: '50%' }}
+            className="btn btn-primary btn-sm"
+            style={{ padding: '5px 9px', borderRadius: '50%' }}
             title="Krijo Hapësirë të re"
           >
             <Plus size={16} />

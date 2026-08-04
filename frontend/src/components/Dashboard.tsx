@@ -20,6 +20,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
 
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [activeSpace, setActiveSpace] = useState<Space | null>(null);
+  const canManageActiveSpace = Boolean(activeSpace && (isAdmin || activeSpace.createdBy?.id === currentUser.id));
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [spaceMembers, setSpaceMembers] = useState<User[]>([]);
@@ -103,8 +104,9 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      setSpaces([...spaces, data]);
-      setActiveSpace(data);
+      const createdSpace = { ...data, createdBy: { id: currentUser.id, firstName: currentUser.firstName, lastName: currentUser.lastName } };
+      setSpaces([...spaces, createdSpace]);
+      setActiveSpace(createdSpace);
       setShowCreateSpace(false);
       setSuccessMsg('Hapësira u krijua me sukses.');
     } catch (err: any) {
@@ -283,18 +285,20 @@ export default function Dashboard({ currentUser }: DashboardProps) {
               </div>
 
               <div style={{ display: 'flex', gap: '10px' }}>
-                {isAdmin && (
-                  <>
+                <>
+                  {isAdmin && (
                     <button onClick={() => { setErrorMsg(''); setShowInviteMember(true); }} className="btn btn-secondary">
                       <UserPlus size={18} />
                       <span>Fto Anëtar</span>
                     </button>
+                  )}
+                  {canManageActiveSpace && (
                     <button onClick={() => { setErrorMsg(''); setShowCreateTask(true); }} className="btn btn-primary">
                       <Plus size={18} />
                       <span>Shto Detyrë</span>
                     </button>
-                  </>
-                )}
+                  )}
+                </>
               </div>
             </div>
 
@@ -309,6 +313,10 @@ export default function Dashboard({ currentUser }: DashboardProps) {
             <p style={{ color: 'hsl(var(--text-secondary))' }}>
               Për të filluar punën, ju lutem krijoni një hapësirë të re ose zgjidhni një ekzistuese në sidebar.
             </p>
+            <button onClick={() => { setErrorMsg(''); setShowCreateSpace(true); }} className="btn btn-primary" style={{ marginTop: '16px' }}>
+              <Plus size={18} />
+              <span>Krijo Hapësirën e parë</span>
+            </button>
           </div>
         )}
       </main>
@@ -364,7 +372,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       {selectedTask && (
         <TaskDetailModal
           task={selectedTask}
-          isAdmin={isAdmin}
+          isAdmin={isAdmin || selectedTask.createdBy?.id === currentUser.id}
           onClose={() => setSelectedTask(null)}
           onStatusChange={handleStatusChange}
           onFileUpload={handleFileUpload}
