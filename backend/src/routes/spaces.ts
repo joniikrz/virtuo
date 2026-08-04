@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import prisma from '../prisma';
-import { authenticateToken, requireAdmin, AuthRequest } from '../middleware/auth';
+import { authenticateToken, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -20,7 +20,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
     let spaces;
 
     if (role === 'ADMIN') {
-      // Adminët (Shefat) shohin të gjitha Spaces në sistem
+      // Adminët shohin të gjitha Spaces në sistem
       spaces = await prisma.space.findMany({
         include: {
           createdBy: {
@@ -37,19 +37,22 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
         orderBy: { name: 'asc' },
       });
     } else {
-      // Përdoruesit shohin hapësirat ku janë anëtarë ose që i kanë krijuar vetë
+      // Përdoruesit shohin:
+      // 1. Krijimet e veta
+      // 2. Spaces ku janë anëtarë (edhe private)
+      // 3. Spaces publike (isPrivate: false)
       spaces = await prisma.space.findMany({
         where: {
           OR: [
             { createdById: userId },
             {
-              isPrivate: false,
               members: {
                 some: {
                   userId: userId,
                 },
               },
             },
+            { isPrivate: false },
           ],
         },
         include: {
@@ -76,7 +79,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 
 /**
  * POST /api/spaces
- * Krijimi i një Space të ri - Për të gjithë përdoruesit e regjistruar
+ * Krijimi i një Space të ri me Transaction
  */
 router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   const { name, description, isPrivate, color } = req.body;
@@ -94,25 +97,28 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   const spaceColor = boardColors.includes(color) ? color : '#0079BF';
 
   try {
-    const space = await prisma.space.create({
-      data: {
-        name,
-        description,
-        color: spaceColor,
-        isPrivate: isPrivate === true || isPrivate === 'true',
-        createdById: creatorId,
-      },
+    const result = await prisma.$transaction(async (tx) => {
+      const newSpace = await tx.space.create({
+        data: {
+          name,
+          description,
+          color: spaceColor,
+          isPrivate: isPrivate === true || isPrivate === 'true',
+          createdById: creatorId,
+        },
+      });
+
+      await tx.spaceMember.create({
+        data: {
+          spaceId: newSpace.id,
+          userId: creatorId,
+        },
+      });
+
+      return newSpace;
     });
 
-    // Shto krijuesin automatikisht si anëtar të parë të këtij Space
-    await prisma.spaceMember.create({
-      data: {
-        spaceId: space.id,
-        userId: creatorId,
-      },
-    });
-
-    return res.status(201).json(space);
+    return res.status(201).json(result);
   } catch (error) {
     console.error('Create space error:', error);
     return res.status(500).json({ error: 'Ndodhi një gabim gjatë krijimit të hapësirës së punës' });
@@ -121,7 +127,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 
 /**
  * POST /api/spaces/:id/members
- * Fton një përdorues në një Space - Anëtarët/Krijuesi i bordit ose Admini
+ * Fton një përdorues në një Space
  */
 router.post('/:id/members', authenticateToken, async (req: AuthRequest, res: Response) => {
   const spaceId = req.params.id;
@@ -134,16 +140,12 @@ router.post('/:id/members', authenticateToken, async (req: AuthRequest, res: Res
   }
 
   try {
-    // Kontrollo nëse ekziston Space
-    const space = await prisma.space.findUnique({
-      where: { id: spaceId },
-    });
+    const space = await prisma.space.findUnique({ where: { id: spaceId } });
 
     if (!space) {
       return res.status(404).json({ error: 'Hapësira e punës nuk u gjet' });
     }
 
-    // Kontrollo nëse përdoruesi aktual ka të drejtë të ftojë në këtë space
     if (role !== 'ADMIN' && space.createdById !== currentUserId) {
       const isMember = await prisma.spaceMember.findUnique({
         where: {
@@ -159,17 +161,12 @@ router.post('/:id/members', authenticateToken, async (req: AuthRequest, res: Res
       }
     }
 
-    // Kontrollo përdoruesin që do të ftohet
-    const userToInvite = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { role: true },
-    });
+    const userToInvite = await prisma.user.findUnique({ where: { id: userId } });
 
     if (!userToInvite) {
       return res.status(404).json({ error: 'Përdoruesi që dëshironi të ftoni nuk u gjet' });
     }
 
-    // Kontrollo nëse është tashmë anëtar
     const existingMember = await prisma.spaceMember.findUnique({
       where: {
         spaceId_userId: {
@@ -209,7 +206,7 @@ router.post('/:id/members', authenticateToken, async (req: AuthRequest, res: Res
 
 /**
  * GET /api/spaces/:id/members
- * Merr të gjithë anëtarët e një Space të caktuar
+ * Merr të gjithë anëtarët e një Space
  */
 router.get('/:id/members', authenticateToken, async (req: AuthRequest, res: Response) => {
   const spaceId = req.params.id;
@@ -221,16 +218,12 @@ router.get('/:id/members', authenticateToken, async (req: AuthRequest, res: Resp
   }
 
   try {
-    // Kontrollo nëse hapësira ekziston dhe nëse përdoruesi ka qasje ta shohë
-    const space = await prisma.space.findUnique({
-      where: { id: spaceId },
-    });
+    const space = await prisma.space.findUnique({ where: { id: spaceId } });
 
     if (!space) {
       return res.status(404).json({ error: 'Hapësira e punës nuk u gjet' });
     }
 
-    // Nëse përdoruesi nuk është admin dhe nuk është krijues ose anëtar, blloko qasjen
     if (role !== 'ADMIN' && space.createdById !== userId) {
       const isMember = await prisma.spaceMember.findUnique({
         where: {
@@ -264,14 +257,16 @@ router.get('/:id/members', authenticateToken, async (req: AuthRequest, res: Resp
       orderBy: { user: { firstName: 'asc' } },
     });
 
-    return res.json(members.map((m) => ({
-      id: m.user.id,
-      email: m.user.email,
-      firstName: m.user.firstName,
-      lastName: m.user.lastName,
-      role: m.user.role.name,
-      joinedAt: m.joinedAt,
-    })));
+    return res.json(
+      members.map((m) => ({
+        id: m.user.id,
+        email: m.user.email,
+        firstName: m.user.firstName,
+        lastName: m.user.lastName,
+        role: m.user.role.name,
+        joinedAt: m.joinedAt,
+      }))
+    );
   } catch (error) {
     console.error('Fetch space members error:', error);
     return res.status(500).json({ error: 'Ndodhi një gabim gjatë marrjes së anëtarëve' });
@@ -280,7 +275,7 @@ router.get('/:id/members', authenticateToken, async (req: AuthRequest, res: Resp
 
 /**
  * PUT /api/spaces/:id
- * Përditëson një board/space - Krijuesi ose Admini
+ * Përditëson një space - Krijuesi ose Admini
  */
 router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
   const spaceId = req.params.id;
@@ -317,7 +312,7 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
 
 /**
  * DELETE /api/spaces/:id
- * Fshin një board/space - Krijuesi ose Admini
+ * Fshin një space - Krijuesi ose Admini
  */
 router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
   const spaceId = req.params.id;

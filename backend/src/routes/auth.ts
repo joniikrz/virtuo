@@ -11,6 +11,8 @@ if (!JWT_SECRET) {
 }
 const JWT_SECRET_VALUE = JWT_SECRET || 'virtuo-dev-secret-do-not-use-in-production';
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 /**
  * POST /api/auth/login
  * Hyrja në sistem (Login)
@@ -23,8 +25,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
+  if (!EMAIL_REGEX.test(email)) {
     res.status(400).json({ error: 'Email-i nuk është i vlefshëm' });
     return;
   }
@@ -48,12 +49,11 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
 
     const token = jwt.sign({ userId: user.id }, JWT_SECRET_VALUE, { expiresIn: '7d' });
 
-    // Vendosja e cookie-t HTTP-Only
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // true në production (HTTPS)
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 ditë
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
     res.json({
@@ -76,7 +76,11 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
  * Dalja nga sistemi (Logout)
  */
 router.post('/logout', (req: Request, res: Response): void => {
-  res.clearCookie('token');
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+  });
   res.json({ message: 'U larguat me sukses' });
 });
 
@@ -90,7 +94,7 @@ router.get('/me', authenticateToken, (req: AuthRequest, res: Response): void => 
 
 /**
  * GET /api/auth/users
- * Lista e të gjithë përdoruesve (për t'i ftuar në bord apo caktuar detyra)
+ * Lista e të gjithë përdoruesve
  */
 router.get('/users', authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -126,13 +130,18 @@ router.get('/users', authenticateToken, async (req: AuthRequest, res: Response):
 
 /**
  * POST /api/auth/register
- * Regjistrim publik për përdorues të rinj (rol USER)
+ * Regjistrim publik për përdorues të rinj
  */
 router.post('/register', async (req: Request, res: Response): Promise<void> => {
   const { email, password, firstName, lastName } = req.body;
 
   if (!email || !password || !firstName || !lastName) {
     res.status(400).json({ error: 'Të gjitha fushat janë të detyrueshme' });
+    return;
+  }
+
+  if (!EMAIL_REGEX.test(email)) {
+    res.status(400).json({ error: 'Email-i nuk është i vlefshëm' });
     return;
   }
 
@@ -166,7 +175,7 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
       include: { role: true },
     });
 
-    const token = jwt.sign({ userId: newUser.id }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ userId: newUser.id }, JWT_SECRET_VALUE, { expiresIn: '7d' });
 
     res.cookie('token', token, {
       httpOnly: true,
@@ -193,7 +202,7 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
 
 /**
  * POST /api/auth/setup
- * Krijon rolet dhe përdoruesin e parë Admin nëse nuk ekziston asnjë përdorues (Inicializimi i parë)
+ * Krijon rolet dhe përdoruesin e parë Admin nëse nuk ekziston asnjë përdorues
  */
 router.post('/setup', async (req: Request, res: Response): Promise<void> => {
   const { email, password, firstName, lastName } = req.body;
@@ -203,8 +212,7 @@ router.post('/setup', async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
+  if (!EMAIL_REGEX.test(email)) {
     res.status(400).json({ error: 'Email-i nuk është i vlefshëm' });
     return;
   }
@@ -221,7 +229,6 @@ router.post('/setup', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Krijimi i roleve
     const adminRole = await prisma.role.upsert({
       where: { name: 'ADMIN' },
       update: {},
@@ -273,7 +280,7 @@ router.post('/setup', async (req: Request, res: Response): Promise<void> => {
 
 /**
  * POST /api/auth/register-user
- * Krijimi i një përdoruesi të ri (Punonjës ose Admin) - Vetëm nga Admin-i
+ * Krijimi i një përdoruesi të ri nga Admin-i
  */
 router.post('/register-user', authenticateToken, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
   const { email, password, firstName, lastName, roleName } = req.body;
@@ -283,8 +290,7 @@ router.post('/register-user', authenticateToken, requireAdmin, async (req: AuthR
     return;
   }
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
+  if (!EMAIL_REGEX.test(email)) {
     res.status(400).json({ error: 'Email-i nuk është i vlefshëm' });
     return;
   }
@@ -300,19 +306,13 @@ router.post('/register-user', authenticateToken, requireAdmin, async (req: AuthR
   }
 
   try {
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
-
+    const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       res.status(400).json({ error: 'Ekziston një përdorues me këtë email' });
       return;
     }
 
-    const role = await prisma.role.findUnique({
-      where: { name: roleName },
-    });
-
+    const role = await prisma.role.findUnique({ where: { name: roleName } });
     if (!role) {
       res.status(400).json({ error: 'Roli i kërkuar nuk ekziston në sistem' });
       return;
@@ -369,10 +369,7 @@ router.put('/change-password', authenticateToken, async (req: AuthRequest, res: 
   }
 
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-    });
-
+    const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       res.status(404).json({ error: 'Përdoruesi nuk u gjet' });
       return;
