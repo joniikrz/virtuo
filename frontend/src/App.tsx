@@ -14,6 +14,9 @@ interface User {
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // State për njoftimet (që i kërkon Navbar)
+  const [notifications, setNotifications] = useState<any[]>([]);
 
   // Verifikimi i sesionit ekzistues (Auto-Login nëse ekziston cookie-i)
   useEffect(() => {
@@ -42,6 +45,14 @@ export default function App() {
     }
   };
 
+  const handleMarkAsRead = (id: string) => {
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+  };
+
+  const handleMarkAllAsRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+  };
+
   if (loading) {
     return (
       <div style={{
@@ -66,7 +77,13 @@ export default function App() {
     <div className="app-container">
       {user ? (
         <>
-          <Navbar user={user} onLogout={handleLogout} />
+          <Navbar 
+            user={user} 
+            onLogout={handleLogout}
+            notifications={notifications}
+            onMarkAsRead={handleMarkAsRead}
+            onMarkAllAsRead={handleMarkAllAsRead}
+          />
           <Dashboard currentUser={user} />
         </>
       ) : (
