@@ -5,7 +5,11 @@ import prisma from '../prisma';
 import { authenticateToken, requireAdmin, AuthRequest } from '../middleware/auth';
 
 const router = Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'virtuo-super-secret-key-12345';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.warn('WARNING: JWT_SECRET is not set. Using a default key for development only.');
+}
+const JWT_SECRET_VALUE = JWT_SECRET || 'virtuo-dev-secret-do-not-use-in-production';
 
 /**
  * POST /api/auth/login
@@ -16,6 +20,12 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
 
   if (!email || !password) {
     res.status(400).json({ error: 'Ju lutem shkruani email-in dhe fjalëkalimin' });
+    return;
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    res.status(400).json({ error: 'Email-i nuk është i vlefshëm' });
     return;
   }
 
@@ -36,7 +46,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET_VALUE, { expiresIn: '7d' });
 
     // Vendosja e cookie-t HTTP-Only
     res.cookie('token', token, {
@@ -99,7 +109,8 @@ router.get('/users', authenticateToken, requireAdmin, async (req: AuthRequest, r
       orderBy: { firstName: 'asc' },
     });
 
-    res.json(users);
+    const formattedUsers = users.map(u => ({ id: u.id, email: u.email, firstName: u.firstName, lastName: u.lastName, role: u.role.name }));
+    res.json(formattedUsers);
   } catch (error) {
     console.error('Fetch users error:', error);
     res.status(500).json({ error: 'Ndodhi një gabim gjatë marrjes së listës së përdoruesve' });
@@ -115,6 +126,17 @@ router.post('/setup', async (req: Request, res: Response): Promise<void> => {
 
   if (!email || !password || !firstName || !lastName) {
     res.status(400).json({ error: 'Të gjitha fushat janë të detyrueshme për regjistrimin e parë' });
+    return;
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    res.status(400).json({ error: 'Email-i nuk është i vlefshëm' });
+    return;
+  }
+
+  if (password.length < 6) {
+    res.status(400).json({ error: 'Fjalëkalimi duhet të ketë të paktën 6 karaktere' });
     return;
   }
 
@@ -150,7 +172,7 @@ router.post('/setup', async (req: Request, res: Response): Promise<void> => {
       include: { role: true },
     });
 
-    const token = jwt.sign({ userId: initialAdmin.id }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ userId: initialAdmin.id }, JWT_SECRET_VALUE, { expiresIn: '7d' });
 
     res.cookie('token', token, {
       httpOnly: true,
@@ -184,6 +206,17 @@ router.post('/register-user', authenticateToken, requireAdmin, async (req: AuthR
 
   if (!email || !password || !firstName || !lastName || !roleName) {
     res.status(400).json({ error: 'Të gjitha fushat janë të detyrueshme' });
+    return;
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    res.status(400).json({ error: 'Email-i nuk është i vlefshëm' });
+    return;
+  }
+
+  if (password.length < 6) {
+    res.status(400).json({ error: 'Fjalëkalimi duhet të ketë të paktën 6 karaktere' });
     return;
   }
 
@@ -235,6 +268,58 @@ router.post('/register-user', authenticateToken, requireAdmin, async (req: AuthR
   } catch (error) {
     console.error('Register user error:', error);
     res.status(500).json({ error: 'Ndodhi një gabim gjatë krijimit të përdoruesit' });
+  }
+});
+
+/**
+ * PUT /api/auth/change-password
+ * Ndryshimi i fjalëkalimit
+ */
+router.put('/change-password', authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  const { currentPassword, newPassword } = req.body;
+
+  if (!userId) {
+    res.status(401).json({ error: 'I paautorizuar' });
+    return;
+  }
+
+  if (!currentPassword || !newPassword) {
+    res.status(400).json({ error: 'Fjalëkalimi aktual dhe i ri janë të detyrueshëm' });
+    return;
+  }
+
+  if (newPassword.length < 6) {
+    res.status(400).json({ error: 'Fjalëkalimi i ri duhet të ketë të paktën 6 karaktere' });
+    return;
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: 'Përdoruesi nuk u gjet' });
+      return;
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isMatch) {
+      res.status(400).json({ error: 'Fjalëkalimi aktual është i gabuar' });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
+
+    res.json({ message: 'Fjalëkalimi u ndryshua me sukses' });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ error: 'Ndodhi një gabim gjatë ndryshimit të fjalëkalimit' });
   }
 });
 

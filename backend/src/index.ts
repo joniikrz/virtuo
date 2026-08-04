@@ -9,6 +9,8 @@ dotenv.config();
 import authRouter from './routes/auth';
 import spacesRouter from './routes/spaces';
 import tasksRouter from './routes/tasks';
+import notificationsRouter from './routes/notifications';
+import tagsRouter from './routes/tags';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -26,6 +28,8 @@ app.use(cookieParser());
 app.use('/api/auth', authRouter);
 app.use('/api/spaces', spacesRouter);
 app.use('/api', tasksRouter);
+app.use('/api/notifications', notificationsRouter);
+app.use('/api', tagsRouter);
 
 // Një rrugë bazë për të kontrolluar statusin e serverit
 app.get('/health', (req, res) => {

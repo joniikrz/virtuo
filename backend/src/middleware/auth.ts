@@ -12,8 +12,11 @@ export interface AuthRequest extends Request {
   };
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'virtuo-super-secret-key-12345';
-
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.warn('WARNING: JWT_SECRET is not set. Using a default key for development only.');
+}
+const JWT_SECRET_VALUE = JWT_SECRET || 'virtuo-dev-secret-do-not-use-in-production';
 /**
  * Middleware për autentikimin e përdoruesit përmes JWT.
  * Kontrollon fillimisht Cookie-n e sigurt HTTP-Only, pastaj header-in Authorization.
@@ -38,7 +41,7 @@ export async function authenticateToken(
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+    const decoded = jwt.verify(token, JWT_SECRET_VALUE) as { userId: string };
 
     // Gjej përdoruesin dhe rolin e tij në databazë
     const user = await prisma.user.findUnique({

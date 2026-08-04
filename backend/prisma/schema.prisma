@@ -18,20 +18,23 @@ model Role {
 }
 
 model User {
-  id           String        @id @default(uuid())
-  email        String        @unique
-  passwordHash String        @map("password_hash")
-  firstName    String        @map("first_name")
-  lastName     String        @map("last_name")
-  roleId       String        @map("role_id")
-  role         Role          @relation(fields: [roleId], references: [id])
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
-  spacesCreated Space[]      @relation("SpaceCreator")
-  spacesJoined SpaceMember[]
-  tasksAssigned Task[]       @relation("TaskAssignee")
-  tasksCreated  Task[]       @relation("TaskCreator")
+  id            String           @id @default(uuid())
+  email         String           @unique
+  passwordHash  String           @map("password_hash")
+  firstName     String           @map("first_name")
+  lastName      String           @map("last_name")
+  roleId        String           @map("role_id")
+  role          Role             @relation(fields: [roleId], references: [id])
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+  spacesCreated Space[]          @relation("SpaceCreator")
+  spacesJoined  SpaceMember[]
+  tasksAssigned Task[]           @relation("TaskAssignee")
+  tasksCreated  Task[]           @relation("TaskCreator")
   attachments   Attachment[]
+  taskVisibility TaskVisibility[]
+  comments      Comment[]
+  notifications Notification[]
 
   @@map("users")
 }
@@ -64,20 +67,25 @@ model SpaceMember {
 }
 
 model Task {
-  id           String       @id @default(uuid())
+  id           String           @id @default(uuid())
   title        String
   description  String?
-  status       String       @default("TODO") // "TODO", "IN_PROGRESS", "COMPLETED"
+  status       String           @default("TODO") // "TODO", "IN_PROGRESS", "COMPLETED"
   deadline     DateTime
-  spaceId      String       @map("space_id")
-  space        Space        @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  assignedToId String?      @map("assigned_to_id")
-  assignedTo   User?        @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
-  createdById  String       @map("created_by_id")
-  createdBy    User         @relation("TaskCreator", fields: [createdById], references: [id])
-  createdAt    DateTime     @default(now()) @map("created_at")
-  updatedAt    DateTime     @updatedAt @map("updated_at")
+  spaceId      String           @map("space_id")
+  space        Space            @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  assignedToId String?          @map("assigned_to_id")
+  assignedTo   User?            @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdById  String           @map("created_by_id")
+  createdBy    User             @relation("TaskCreator", fields: [createdById], references: [id])
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
   attachments  Attachment[]
+  visibleToAll Boolean          @default(true) @map("visible_to_all")
+  priority     String           @default("NORMAL") @map("priority")
+  visibility   TaskVisibility[]
+  comments     Comment[]
+  tags         TaskTag[]
 
   @@map("tasks")
 }
@@ -95,4 +103,56 @@ model Attachment {
   uploadedAt   DateTime @default(now()) @map("uploaded_at")
 
   @@map("attachments")
+}
+
+model TaskVisibility {
+  id     String @id @default(uuid())
+  taskId String @map("task_id")
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([taskId, userId])
+  @@map("task_visibility")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  content   String
+  taskId    String   @map("task_id")
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId  String   @map("author_id")
+  author    User     @relation(fields: [authorId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("comments")
+}
+
+model Tag {
+  id    String    @id @default(uuid())
+  name  String    @unique
+  color String    @default("#6366f1")
+  tasks TaskTag[]
+  @@map("tags")
+}
+
+model TaskTag {
+  id     String @id @default(uuid())
+  taskId String @map("task_id")
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tagId  String @map("tag_id")
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  @@unique([taskId, tagId])
+  @@map("task_tags")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // TASK_ASSIGNED, TASK_COMPLETED, COMMENT_ADDED, DEADLINE_APPROACHING
+  title     String
+  message   String
+  isRead    Boolean  @default(false) @map("is_read")
+  taskId    String?  @map("task_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("notifications")
 }

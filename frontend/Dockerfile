@@ -1,33 +1,23 @@
+# 1. Stage për build-in e React/Vite
 FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# 1. Instalojmë OpenSSL dhe libc6-compat që të punojë Prisma Engine në Alpine
-RUN apk add --no-cache openssl libc6-compat
-
 COPY package*.json ./
-COPY prisma ./prisma/
-
 RUN npm install
-RUN npx prisma generate
 
 COPY . .
 RUN npm run build
 
-FROM node:20-alpine
+# 2. Stage për shërbimin me Nginx
+FROM nginx:alpine
 
-WORKDIR /app
+# Kopjimi i dist-it të frontend-it në Nginx
+COPY --from=build /app/dist /usr/share/nginx/html
 
-# Instalojmë OpenSSL edhe në stage-in përfundimtar
-RUN apk add --no-cache openssl libc6-compat
+# Kopjimi i konfigurimit të Nginx
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-COPY package*.json ./
-RUN npm install --only=production
+EXPOSE 80
 
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/prisma ./prisma
-COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
-
-EXPOSE 5000
-
-CMD ["node", "dist/index.js"]
+CMD ["nginx", "-g", "daemon off;"]
