@@ -19,7 +19,7 @@ export default function App() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await fetch('/api/auth/me');
+        const response = await fetch('/api/auth/me', { credentials: 'include' });
         if (response.ok) {
           const data = await response.json();
           setUser(data.user);
@@ -35,7 +35,7 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
       setUser(null);
     } catch (error) {
       console.error('Logout error:', error);
@@ -50,11 +50,13 @@ export default function App() {
         alignItems: 'center',
         minHeight: '100vh',
         fontFamily: "'Outfit', sans-serif",
-        color: 'hsl(var(--text-secondary))'
+        background: '#0079bf',
+        color: '#fff',
       }}>
         <div style={{ textAlign: 'center' }}>
-          <h2 style={{ marginBottom: '10px', color: '#fff' }}>Duke u ngarkuar...</h2>
-          <p>Ju lutem prisni sa të lidhemi me serverin e Virtuo.</p>
+          <div className="trello-logo-mark" style={{ margin: '0 auto 16px' }}>V</div>
+          <h2 style={{ marginBottom: '8px' }}>Duke u ngarkuar...</h2>
+          <p style={{ opacity: 0.85 }}>Virtuo Task Manager</p>
         </div>
       </div>
     );

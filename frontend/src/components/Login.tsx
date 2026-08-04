@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LogIn, UserCheck, ShieldAlert } from 'lucide-react';
+import { LogIn, UserPlus, ShieldAlert } from 'lucide-react';
 
 interface LoginProps {
   onLoginSuccess: (user: {
@@ -11,15 +11,16 @@ interface LoginProps {
   }) => void;
 }
 
+type AuthMode = 'login' | 'register';
+
 export default function Login({ onLoginSuccess }: LoginProps) {
-  const [isSetupMode, setIsSetupMode] = useState(false);
+  const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [successMsg, setSuccessMsg] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,10 +28,11 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     setLoading(true);
 
     try {
-      const endpoint = isSetupMode ? '/api/auth/setup' : '/api/auth/login';
-      const body = isSetupMode 
-        ? { email, password, firstName, lastName }
-        : { email, password };
+      const endpoint = mode === 'register' ? '/api/auth/register' : '/api/auth/login';
+      const body =
+        mode === 'register'
+          ? { email, password, firstName, lastName }
+          : { email, password };
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -44,94 +46,88 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         throw new Error(data.error || 'Ndodhi një gabim gjatë procesit');
       }
 
-      if (isSetupMode) {
-        setSuccessMsg('Sistemi u inicializua me sukses! Tani mund të kyçeni.');
-        setIsSetupMode(false);
-        setPassword('');
-      } else {
-        onLoginSuccess(data.user);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Gabim lidhjeje me serverin');
+      onLoginSuccess(data.user);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Gabim lidhjeje me serverin';
+      setError(message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const switchMode = (next: AuthMode) => {
+    setMode(next);
+    setError('');
+    setPassword('');
   };
 
   return (
     <div className="auth-wrapper">
       <div className="auth-card">
         <div className="logo-header">
+          <div className="trello-logo-mark">V</div>
           <h1>Virtuo</h1>
-          <p>{isSetupMode ? 'Konfigurimi Fillestar i Administratorit' : 'Sistemi i Menaxhimit të Detyrave'}</p>
+          <p>{mode === 'register' ? 'Krijo llogarinë tënde' : 'Menaxho detyrat si në Trello'}</p>
+        </div>
+
+        <div className="auth-tabs">
+          <button
+            type="button"
+            className={`auth-tab ${mode === 'login' ? 'active' : ''}`}
+            onClick={() => switchMode('login')}
+          >
+            Kyçu
+          </button>
+          <button
+            type="button"
+            className={`auth-tab ${mode === 'register' ? 'active' : ''}`}
+            onClick={() => switchMode('register')}
+          >
+            Regjistrohu
+          </button>
         </div>
 
         {error && (
-          <div style={{
-            backgroundColor: 'hsl(var(--accent-danger) / 0.15)',
-            border: '1px solid hsl(var(--accent-danger) / 0.3)',
-            color: 'hsl(var(--accent-danger))',
-            padding: '12px',
-            borderRadius: 'var(--border-radius-sm)',
-            marginBottom: '20px',
-            fontSize: '0.85rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
+          <div className="alert alert-error">
             <ShieldAlert size={16} />
             <span>{error}</span>
           </div>
         )}
 
-        {successMsg && (
-          <div style={{
-            backgroundColor: 'hsl(var(--accent-success) / 0.15)',
-            border: '1px solid hsl(var(--accent-success) / 0.3)',
-            color: 'hsl(var(--accent-success))',
-            padding: '12px',
-            borderRadius: 'var(--border-radius-sm)',
-            marginBottom: '20px',
-            fontSize: '0.85rem',
-            textAlign: 'center'
-          }}>
-            {successMsg}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {isSetupMode && (
+        <form onSubmit={handleSubmit} className="auth-form">
+          {mode === 'register' && (
             <>
-              <div className="form-group">
-                <label htmlFor="firstName">Emri</label>
-                <input
-                  type="text"
-                  id="firstName"
-                  className="input-field"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="Filan"
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="lastName">Mbiemri</label>
-                <input
-                  type="text"
-                  id="lastName"
-                  className="input-field"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Fisteku"
-                  required
-                />
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="firstName">Emri</label>
+                  <input
+                    type="text"
+                    id="firstName"
+                    className="input-field"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="Filan"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="lastName">Mbiemri</label>
+                  <input
+                    type="text"
+                    id="lastName"
+                    className="input-field"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Fisteku"
+                    required
+                  />
+                </div>
               </div>
             </>
           )}
 
           <div className="form-group">
-            <label htmlFor="email">Email Adresa</label>
+            <label htmlFor="email">Email</label>
             <input
               type="email"
               id="email"
@@ -153,45 +149,49 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
+              minLength={mode === 'register' ? 6 : undefined}
             />
           </div>
 
-          <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop: '10px' }}>
+          <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
             {loading ? (
-              <span>Duke u procesuar...</span>
-            ) : isSetupMode ? (
+              'Duke u procesuar...'
+            ) : mode === 'register' ? (
               <>
-                <UserCheck size={18} />
-                <span>Krijo Administratorin</span>
+                <UserPlus size={18} />
+                <span>Krijo llogarinë</span>
               </>
             ) : (
               <>
                 <LogIn size={18} />
-                <span>Kyçu në Sistem</span>
+                <span>Kyçu</span>
               </>
             )}
           </button>
         </form>
 
-        <div style={{ marginTop: '24px', textAlign: 'center' }}>
-          <button
-            onClick={() => {
-              setIsSetupMode(!isSetupMode);
-              setError('');
-              setSuccessMsg('');
-            }}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'hsl(var(--text-secondary))',
-              fontSize: '0.85rem',
-              cursor: 'pointer',
-              textDecoration: 'underline'
-            }}
-          >
-            {isSetupMode ? 'Kthehu te Hyrja (Login)' : 'Inicializimi i parë? Krijo llogarinë Admin'}
-          </button>
-        </div>
+        {mode === 'login' ? (
+          <div className="auth-hint">
+            <span>Kredencialet e Adminit të para-konfiguruar:</span>
+            <div className="admin-creds">
+              <code>admin@virtuo.local</code> / <code>Admin123!</code>
+              <button
+                type="button"
+                className="btn-link"
+                onClick={() => {
+                  setEmail('admin@virtuo.local');
+                  setPassword('Admin123!');
+                }}
+              >
+                Plotëso automatikisht
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p className="auth-hint">
+            Me regjistrimin e llogarisë tënde mund të krijosh bordet e tua, të ftosh anëtarë të ekipit dhe të menaxhosh kartat si në Trello!
+          </p>
+        )}
       </div>
     </div>
   );

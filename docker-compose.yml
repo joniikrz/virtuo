@@ -17,6 +17,9 @@ services:
     environment:
       DATABASE_URL: "postgresql://virtuo:yourpassword@db:5432/virtuo?schema=public"
       JWT_SECRET: "virtuo-super-secret-key-12345"
+      ADMIN_EMAIL: "admin@virtuo.local"
+      ADMIN_PASSWORD: "Admin123!"
+      FRONTEND_URL: "http://localhost"
     depends_on:
       - db
 

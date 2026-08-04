@@ -119,12 +119,13 @@ router.get('/spaces/:spaceId/tasks', authenticateToken, async (req: AuthRequest,
 
 /**
  * POST /api/spaces/:spaceId/tasks
- * Krijon një detyrë të re - Vetëm për Admin/Shefa
+ * Krijon një detyrë të re - Për anëtarët e kësaj hapësire
  */
-router.post('/spaces/:spaceId/tasks', authenticateToken, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/spaces/:spaceId/tasks', authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
   const { spaceId } = req.params;
   const { title, description, deadline, assignedToId, priority, visibleToAll, visibleToUserIds } = req.body;
   const creatorId = req.user?.id;
+  const role = req.user?.role;
 
   if (!title || !deadline) {
     res.status(400).json({ error: 'Titulli dhe Afati i fundit (Deadline) janë të detyrueshme' });
@@ -156,6 +157,23 @@ router.post('/spaces/:spaceId/tasks', authenticateToken, requireAdmin, async (re
       return;
     }
 
+    // Kontrollo nëse përdoruesi ka qasje në këtë Space
+    if (role !== 'ADMIN' && space.createdById !== creatorId) {
+      const isMember = await prisma.spaceMember.findUnique({
+        where: {
+          spaceId_userId: {
+            spaceId,
+            userId: creatorId,
+          },
+        },
+      });
+
+      if (!isMember) {
+        res.status(403).json({ error: 'Nuk keni leje të krijoni detyra në këtë hapësirë' });
+        return;
+      }
+    }
+
     let assignedUser = null;
     if (assignedToId) {
       assignedUser = await prisma.user.findUnique({
@@ -171,11 +189,8 @@ router.post('/spaces/:spaceId/tasks', authenticateToken, requireAdmin, async (re
         where: { spaceId_userId: { spaceId, userId: assignedToId } },
       });
 
+      // Nëse ai nuk është anëtar, e shtojmë automatikisht te spaceMembers
       if (!isMember) {
-        if (space.isPrivate) {
-          res.status(400).json({ error: 'Punonjësi i caktuar nuk është anëtar i kësaj hapësire private' });
-          return;
-        }
         await prisma.spaceMember.create({
           data: { spaceId, userId: assignedToId },
         });
@@ -529,6 +544,45 @@ router.get('/tasks/:id/comments', authenticateToken, async (req: AuthRequest, re
   } catch (error) {
     console.error('Get comments error:', error);
     res.status(500).json({ error: 'Ndodhi një gabim' });
+  }
+});
+
+/**
+ * DELETE /api/tasks/:id
+ * Fshin një detyrë - Admin, Krijuesi i detyrës ose Krijuesi i Space
+ */
+router.delete('/tasks/:id', authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  const taskId = req.params.id;
+  const userId = req.user?.id;
+  const role = req.user?.role;
+
+  try {
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      include: { attachments: true, space: true },
+    });
+
+    if (!task) {
+      res.status(404).json({ error: 'Detyra nuk u gjet' });
+      return;
+    }
+
+    if (role !== 'ADMIN' && task.createdById !== userId && task.space.createdById !== userId) {
+      res.status(403).json({ error: 'Nuk keni të drejtë të fshini këtë detyrë' });
+      return;
+    }
+
+    for (const att of task.attachments) {
+      if (fs.existsSync(att.filePath)) {
+        fs.unlinkSync(att.filePath);
+      }
+    }
+
+    await prisma.task.delete({ where: { id: taskId } });
+    res.json({ message: 'Detyra u fshi me sukses' });
+  } catch (error) {
+    console.error('Delete task error:', error);
+    res.status(500).json({ error: 'Ndodhi një gabim gjatë fshirjes së detyrës' });
   }
 });
 
