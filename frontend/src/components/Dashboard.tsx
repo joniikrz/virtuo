@@ -20,8 +20,8 @@ export default function Dashboard({ currentUser }: DashboardProps) {
 
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [activeSpace, setActiveSpace] = useState<Space | null>(null);
-  const canManageActiveSpace = Boolean(activeSpace && (isAdmin || activeSpace.createdBy?.id === currentUser.id));
   const isSpaceOwner = Boolean(activeSpace && activeSpace.createdBy?.id === currentUser.id);
+  const canManageActiveSpace = isSpaceOwner;
   const canCreateTask = Boolean(activeSpace && (isAdmin || spaceMembers.some((member) => member.id === currentUser.id)));
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);

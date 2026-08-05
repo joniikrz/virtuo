@@ -41,7 +41,7 @@ async function spaceAccess(spaceId: string, userId: string, role: string) {
   if (!space) return { space: null, isMember: false, isOwner: false, canView: false };
   const isOwner = space.createdById === userId;
   const isMember = isOwner || Boolean(await prisma.spaceMember.findUnique({ where: { spaceId_userId: { spaceId, userId } } }));
-  return { space, isMember, isOwner, canView: role === 'ADMIN' || isMember };
+  return { space, isMember, isOwner, canView: isMember };
 }
 
 async function taskAccess(taskId: string, userId: string, role: string) {
@@ -50,8 +50,8 @@ async function taskAccess(taskId: string, userId: string, role: string) {
   const access = await spaceAccess(task.spaceId, userId, role);
   const isCreator = task.createdById === userId;
   const isAssignee = task.assignedToId === userId;
-  const canManage = role === 'ADMIN' || access.isOwner || isCreator;
-  const canView = access.canView && (role === 'ADMIN' || isCreator || isAssignee);
+  const canManage = isCreator;
+  const canView = access.canView && (isCreator || isAssignee);
   return { task, canView, canManage, canChangeStatus: canManage || isAssignee };
 }
 
@@ -69,6 +69,14 @@ async function createCompletionNotification(task: any, completedBy: string) {
     data: { userId: task.createdBy.id, taskId: task.id, type: 'TASK_COMPLETED', title: 'Detyrë e përfunduar', message: `Detyra u përfundua: ${task.title}` },
   });
   await sendTaskCompletedEmail(task.createdBy.email, `${task.createdBy.firstName} ${task.createdBy.lastName}`, task.title, task.assignedTo ? `${task.assignedTo.firstName} ${task.assignedTo.lastName}` : 'Një anëtar');
+}
+
+async function removeTaskFiles(filePaths: string[]) {
+  await Promise.all(filePaths.map(async (filePath) => {
+    const resolvedPath = path.resolve(filePath);
+    if (!resolvedPath.startsWith(`${uploadDirectory}${path.sep}`)) return;
+    await fs.promises.unlink(resolvedPath).catch(() => undefined);
+  }));
 }
 
 router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -189,7 +197,9 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
     const access = await taskAccess(req.params.id, userId, req.user?.role || 'USER');
     if (!access.task) return res.status(404).json({ error: 'Detyra nuk u gjet' });
     if (access.task.createdById !== userId) return res.status(403).json({ error: 'Vetëm krijuesi i detyrës mund ta fshijë' });
+    const attachments = await prisma.attachment.findMany({ where: { taskId: access.task.id }, select: { filePath: true } });
     await prisma.task.delete({ where: { id: access.task.id } });
+    await removeTaskFiles(attachments.map((attachment) => attachment.filePath));
     return res.json({ message: 'Detyra u fshi me sukses' });
   } catch (error) { console.error('Delete task error:', error); return res.status(500).json({ error: 'Gabim gjatë fshirjes së detyrës' }); }
 });

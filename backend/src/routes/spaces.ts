@@ -1,8 +1,19 @@
 import { Router, Response } from 'express';
+import fs from 'fs/promises';
+import path from 'path';
 import prisma from '../prisma';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 
 const router = Router();
+const uploadDirectory = path.resolve(process.env.UPLOAD_DIR || 'uploads');
+
+async function removeStoredFiles(filePaths: string[]) {
+  await Promise.all(filePaths.map(async (filePath) => {
+    const resolvedPath = path.resolve(filePath);
+    if (!resolvedPath.startsWith(`${uploadDirectory}${path.sep}`)) return;
+    await fs.unlink(resolvedPath).catch(() => undefined);
+  }));
+}
 
 /**
  * GET /api/spaces
@@ -11,7 +22,6 @@ const router = Router();
 router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   const role = req.user?.role;
-
   if (!userId) {
     return res.status(401).json({ error: 'I paautorizuar' });
   }
@@ -20,8 +30,14 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
     let spaces;
 
     if (role === 'ADMIN') {
-      // Adminët shohin të gjitha Spaces në sistem
+      // Edhe administratori duhet të jetë krijues ose anëtar i hapësirës private.
       spaces = await prisma.space.findMany({
+        where: {
+          OR: [
+            { createdById: userId },
+            { members: { some: { userId } } },
+          ],
+        },
         include: {
           createdBy: {
             select: {
@@ -142,8 +158,6 @@ router.post('/:id/members', authenticateToken, async (req: AuthRequest, res: Res
   const spaceId = req.params.id;
   const { userId } = req.body;
   const currentUserId = req.user?.id;
-  const role = req.user?.role;
-
   if (!userId) {
     return res.status(400).json({ error: 'ID e përdoruesit është e detyrueshme' });
   }
@@ -155,7 +169,7 @@ router.post('/:id/members', authenticateToken, async (req: AuthRequest, res: Res
       return res.status(404).json({ error: 'Hapësira e punës nuk u gjet' });
     }
 
-    if (role !== 'ADMIN' && space.createdById !== currentUserId) {
+    if (space.createdById !== currentUserId) {
       return res.status(403).json({ error: 'Vetëm krijuesi i hapësirës mund të menaxhojë anëtarët' });
     }
 
@@ -209,7 +223,6 @@ router.post('/:id/members', authenticateToken, async (req: AuthRequest, res: Res
 router.get('/:id/members', authenticateToken, async (req: AuthRequest, res: Response) => {
   const spaceId = req.params.id;
   const userId = req.user?.id;
-  const role = req.user?.role;
 
   if (!userId) {
     return res.status(401).json({ error: 'I paautorizuar' });
@@ -222,7 +235,7 @@ router.get('/:id/members', authenticateToken, async (req: AuthRequest, res: Resp
       return res.status(404).json({ error: 'Hapësira e punës nuk u gjet' });
     }
 
-    if (role !== 'ADMIN' && space.createdById !== userId) {
+    if (space.createdById !== userId) {
       const isMember = await prisma.spaceMember.findUnique({
         where: {
           spaceId_userId: {
@@ -274,13 +287,12 @@ router.get('/:id/members', authenticateToken, async (req: AuthRequest, res: Resp
 /** Heq një anëtar. Krijuesi i hapësirës mbetet gjithmonë anëtar. */
 router.delete('/:id/members/:userId', authenticateToken, async (req: AuthRequest, res: Response) => {
   const currentUserId = req.user?.id;
-  const role = req.user?.role;
   const { id: spaceId, userId } = req.params;
   if (!currentUserId) return res.status(401).json({ error: 'I paautorizuar' });
   try {
     const space = await prisma.space.findUnique({ where: { id: spaceId } });
     if (!space) return res.status(404).json({ error: 'Hapësira e punës nuk u gjet' });
-    if (role !== 'ADMIN' && space.createdById !== currentUserId) return res.status(403).json({ error: 'Nuk keni leje të hiqni anëtarë' });
+    if (space.createdById !== currentUserId) return res.status(403).json({ error: 'Nuk keni leje të hiqni anëtarë' });
     if (userId === space.createdById) return res.status(400).json({ error: 'Krijuesi i hapësirës nuk mund të hiqet' });
     await prisma.spaceMember.delete({ where: { spaceId_userId: { spaceId, userId } } });
     return res.json({ message: 'Anëtari u hoq nga hapësira' });
@@ -298,15 +310,13 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
   const spaceId = req.params.id;
   const { name, color } = req.body;
   const userId = req.user?.id;
-  const role = req.user?.role;
-
   try {
     const space = await prisma.space.findUnique({ where: { id: spaceId } });
     if (!space) {
       return res.status(404).json({ error: 'Hapësira e punës nuk u gjet' });
     }
 
-    if (role !== 'ADMIN' && space.createdById !== userId) {
+    if (space.createdById !== userId) {
       return res.status(403).json({ error: 'Nuk keni të drejtë të modifikoni këtë hapësirë' });
     }
 
@@ -344,7 +354,12 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
       return res.status(403).json({ error: 'Nuk keni të drejtë të fshini këtë hapësirë' });
     }
 
+    const attachments = await prisma.attachment.findMany({
+      where: { task: { spaceId } },
+      select: { filePath: true },
+    });
     await prisma.space.delete({ where: { id: spaceId } });
+    await removeStoredFiles(attachments.map((attachment) => attachment.filePath));
     return res.json({ message: 'Hapësira u fshi me sukses' });
   } catch (error) {
     console.error('Delete space error:', error);

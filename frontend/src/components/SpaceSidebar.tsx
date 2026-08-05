@@ -23,16 +23,14 @@ export default function SpaceSidebar({
     <aside className="sidebar">
       <div className="sidebar-header">
         <span className="sidebar-title">Hapësirat e Punës</span>
-        {true && (
-          <button 
-            onClick={onShowCreateSpace} 
-            className="btn btn-primary btn-sm"
-            style={{ padding: '5px 9px', borderRadius: '50%' }}
-            title="Krijo Hapësirë të re"
-          >
-            <Plus size={16} />
-          </button>
-        )}
+        <button
+          onClick={onShowCreateSpace}
+          className="btn btn-primary btn-sm"
+          style={{ padding: '5px 9px', borderRadius: '50%' }}
+          title="Krijo Hapësirë të re"
+        >
+          <Plus size={16} />
+        </button>
       </div>
 
       <div className="space-list">
@@ -43,10 +41,10 @@ export default function SpaceSidebar({
             onClick={() => onSelectSpace(s)}
           >
             <span className="space-item-name">
-              {s.isPrivate ? <Lock size={14} style={{ color: 'hsl(var(--accent-warning))' }} /> : <Unlock size={14} />}
+              <Lock size={14} style={{ color: 'hsl(var(--accent-warning))' }} />
               {s.name}
             </span>
-            {s.isPrivate && <span className="space-item-badge">Boss</span>}
+            <span className="space-item-badge">Hapësirë private</span>
           </div>
         ))}
         {spaces.length === 0 && (
