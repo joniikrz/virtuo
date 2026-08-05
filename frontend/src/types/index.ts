@@ -4,6 +4,9 @@ export interface User {
   firstName: string;
   lastName: string;
   role: string;
+  emailNotifications?: boolean;
+  inAppNotifications?: boolean;
+  hasRecoveryCode?: boolean;
 }
 
 export interface Space {

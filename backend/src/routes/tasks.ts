@@ -22,9 +22,9 @@ const upload = multer({
 });
 
 const taskInclude = {
-  assignedTo: { select: { id: true, email: true, firstName: true, lastName: true } },
-  assignees: { include: { user: { select: { id: true, email: true, firstName: true, lastName: true } } } },
-  createdBy: { select: { id: true, email: true, firstName: true, lastName: true } },
+  assignedTo: { select: { id: true, email: true, firstName: true, lastName: true, emailNotifications: true, inAppNotifications: true } },
+  assignees: { include: { user: { select: { id: true, email: true, firstName: true, lastName: true, emailNotifications: true, inAppNotifications: true } } } },
+  createdBy: { select: { id: true, email: true, firstName: true, lastName: true, emailNotifications: true, inAppNotifications: true } },
   attachments: { select: { id: true, fileName: true, fileSize: true, mimeType: true, uploadedAt: true } },
   comments: { include: { author: { select: { id: true, firstName: true, lastName: true, role: { select: { name: true } } } } }, orderBy: { createdAt: 'asc' } },
   tags: { include: { tag: true } },
@@ -68,22 +68,30 @@ async function createAssignmentNotifications(task: any, onlyUserIds?: Set<string
   await Promise.all(assignedUsers
     .filter((user: any) => user.id !== task.createdBy.id && (!onlyUserIds || onlyUserIds.has(user.id)))
     .map(async (user: any) => {
-      await prisma.notification.create({
-        data: { userId: user.id, taskId: task.id, type: 'TASK_ASSIGNED', title: 'Detyrë e re', message: `Ju është caktuar detyra: ${task.title}` },
-      });
-      await sendTaskAssignedEmail(user.email, `${user.firstName} ${user.lastName}`, task.title, `${task.createdBy.firstName} ${task.createdBy.lastName}`, task.deadline);
+      if (user.inAppNotifications) {
+        await prisma.notification.create({
+          data: { userId: user.id, taskId: task.id, type: 'TASK_ASSIGNED', title: 'Detyrë e re', message: `Ju është caktuar detyra: ${task.title}` },
+        });
+      }
+      if (user.emailNotifications) {
+        await sendTaskAssignedEmail(user.email, `${user.firstName} ${user.lastName}`, task.title, `${task.createdBy.firstName} ${task.createdBy.lastName}`, task.deadline);
+      }
     }));
 }
 
 async function createCompletionNotification(task: any, completedBy: string) {
   if (task.createdBy.id === completedBy) return;
-  await prisma.notification.create({
-    data: { userId: task.createdBy.id, taskId: task.id, type: 'TASK_COMPLETED', title: 'Detyrë e përfunduar', message: `Detyra u përfundua: ${task.title}` },
-  });
+  if (task.createdBy.inAppNotifications) {
+    await prisma.notification.create({
+      data: { userId: task.createdBy.id, taskId: task.id, type: 'TASK_COMPLETED', title: 'Detyrë e përfunduar', message: `Detyra u përfundua: ${task.title}` },
+    });
+  }
   const completedByNames = task.assignees?.length
     ? task.assignees.map((assignment: any) => `${assignment.user.firstName} ${assignment.user.lastName}`).join(', ')
     : task.assignedTo ? `${task.assignedTo.firstName} ${task.assignedTo.lastName}` : 'Një anëtar';
-  await sendTaskCompletedEmail(task.createdBy.email, `${task.createdBy.firstName} ${task.createdBy.lastName}`, task.title, completedByNames);
+  if (task.createdBy.emailNotifications) {
+    await sendTaskCompletedEmail(task.createdBy.email, `${task.createdBy.firstName} ${task.createdBy.lastName}`, task.title, completedByNames);
+  }
 }
 
 async function removeTaskFiles(filePaths: string[]) {

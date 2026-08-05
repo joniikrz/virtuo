@@ -10,6 +10,9 @@ export interface User {
   firstName: string;
   lastName: string;
   role: string;
+  emailNotifications?: boolean;
+  inAppNotifications?: boolean;
+  hasRecoveryCode?: boolean;
 }
 
 export interface NotificationItem {
@@ -148,6 +151,7 @@ export default function App() {
         <>
           <Navbar
             user={user}
+            onUserUpdate={setUser}
             onLogout={handleLogout}
             notifications={notifications}
             onMarkAsRead={handleMarkAsRead}

@@ -12,6 +12,7 @@ export default function RegisterUserModal({ onClose, onSubmit, errorMsg }: Regis
   const [regFirstName, setRegFirstName] = useState('');
   const [regLastName, setRegLastName] = useState('');
   const [regRole, setRegRole] = useState('USER');
+  const [regRecoveryCode, setRegRecoveryCode] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,6 +22,7 @@ export default function RegisterUserModal({ onClose, onSubmit, errorMsg }: Regis
       firstName: regFirstName,
       lastName: regLastName,
       roleName: regRole,
+      recoveryCode: regRecoveryCode,
     });
   };
 
@@ -89,6 +91,20 @@ export default function RegisterUserModal({ onClose, onSubmit, errorMsg }: Regis
                 <option value="USER">Punonjës (User)</option>
                 <option value="ADMIN">Menaxher / Shef (Admin)</option>
               </select>
+            </div>
+            <div className="form-group">
+              <label>Kodi fillestar i rikuperimit</label>
+              <input
+                type="password"
+                className="input-field"
+                value={regRecoveryCode}
+                onChange={e => setRegRecoveryCode(e.target.value)}
+                placeholder="Së paku 6 karaktere"
+                minLength={6}
+                maxLength={64}
+                required
+              />
+              <small className="field-help">Jepja përdoruesit privatisht; ai mund ta ndryshojë te Cilësimet.</small>
             </div>
           </div>
           <div className="modal-footer">

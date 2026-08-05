@@ -1,21 +1,22 @@
 import React, { useState } from 'react';
-import { LogOut, User as UserIcon, Bell } from 'lucide-react';
+import { LogOut, User as UserIcon, Bell, Settings } from 'lucide-react';
 import { User, Notification } from '../types';
 import NotificationsPanel from './NotificationsPanel';
 import ThemeToggle from './ThemeToggle';
-import ProfileModal from './ProfileModal';
+import SettingsPanel from './SettingsPanel';
 
 interface NavbarProps {
   user: User;
   onLogout: () => void;
+  onUserUpdate: (user: User) => void;
   notifications: Notification[];
   onMarkAsRead: (id: string) => void;
   onMarkAllAsRead: () => void;
 }
 
-export default function Navbar({ user, onLogout, notifications, onMarkAsRead, onMarkAllAsRead }: NavbarProps) {
+export default function Navbar({ user, onLogout, onUserUpdate, notifications, onMarkAsRead, onMarkAllAsRead }: NavbarProps) {
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -29,6 +30,16 @@ export default function Navbar({ user, onLogout, notifications, onMarkAsRead, on
         <div className="nav-user" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           
           <ThemeToggle />
+
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm nav-icon-button"
+            onClick={() => { setShowNotifications(false); setShowSettings(true); }}
+            aria-label="Hap cilësimet"
+            title="Cilësimet"
+          >
+            <Settings size={18} />
+          </button>
 
           <div style={{ position: 'relative' }}>
             <button 
@@ -61,9 +72,11 @@ export default function Navbar({ user, onLogout, notifications, onMarkAsRead, on
             </button>
           </div>
 
-          <div 
+          <button
+            type="button"
             className="user-badge" 
-            onClick={() => setShowProfile(true)} 
+            onClick={() => { setShowNotifications(false); setShowSettings(true); }}
+            aria-label="Hap profilin"
             style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', backgroundColor: 'hsl(var(--bg-primary))', borderRadius: '20px', border: '1px solid hsl(var(--border))' }}
           >
             <UserIcon size={14} />
@@ -71,7 +84,7 @@ export default function Navbar({ user, onLogout, notifications, onMarkAsRead, on
             <span className={`role-tag ${user.role.toLowerCase()}`} style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '10px', backgroundColor: user.role === 'ADMIN' ? 'hsl(var(--accent-danger) / 0.1)' : 'hsl(var(--primary) / 0.1)', color: user.role === 'ADMIN' ? 'hsl(var(--accent-danger))' : 'hsl(var(--primary))' }}>
               {user.role}
             </span>
-          </div>
+          </button>
 
           <button onClick={onLogout} className="btn btn-secondary btn-sm nav-logout" title="Dil" aria-label="Dil nga llogaria" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <LogOut size={16} />
@@ -88,7 +101,7 @@ export default function Navbar({ user, onLogout, notifications, onMarkAsRead, on
         onMarkAllAsRead={onMarkAllAsRead}
       />
       
-      {showProfile && <ProfileModal user={user} onClose={() => setShowProfile(false)} />}
+      <SettingsPanel user={user} isOpen={showSettings} onClose={() => setShowSettings(false)} onUserUpdate={onUserUpdate} />
     </>
   );
 }

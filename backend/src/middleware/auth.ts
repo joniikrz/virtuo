@@ -14,6 +14,9 @@ export interface AuthRequest extends Request {
     firstName: string;
     lastName: string;
     role: string;
+    emailNotifications: boolean;
+    inAppNotifications: boolean;
+    hasRecoveryCode: boolean;
   };
 }
 
@@ -59,6 +62,9 @@ export const authenticateToken = async (
       firstName: user.firstName,
       lastName: user.lastName,
       role: user.role.name,
+      emailNotifications: user.emailNotifications,
+      inAppNotifications: user.inAppNotifications,
+      hasRecoveryCode: Boolean(user.recoveryCodeHash),
     };
 
     next();
