@@ -32,6 +32,7 @@ model User {
   tasksAssigned Task[]           @relation("TaskAssignee")
   tasksCreated  Task[]           @relation("TaskCreator")
   attachments   Attachment[]
+  taskVisibility TaskVisibility[]
   comments      Comment[]
   notifications Notification[]
 
@@ -41,6 +42,8 @@ model User {
 model Space {
   id          String        @id @default(uuid())
   name        String
+  // Fushë legacy për DB-të ekzistuese. Nuk përdoret nga API ose UI.
+  description String?
   color       String        @default("#0079BF")
   isPrivate   Boolean       @default(true) @map("is_private")
   createdById String        @map("created_by_id")
@@ -80,7 +83,10 @@ model Task {
   createdAt    DateTime         @default(now()) @map("created_at")
   updatedAt    DateTime         @updatedAt @map("updated_at")
   attachments  Attachment[]
+  // Fushë legacy për DB-të ekzistuese. Dukshmëria kontrollohet vetëm me assignedToId.
+  visibleToAll Boolean          @default(true) @map("visible_to_all")
   priority     String           @default("NORMAL") @map("priority")
+  visibility   TaskVisibility[]
   comments     Comment[]
   tags         TaskTag[]
 
@@ -100,6 +106,18 @@ model Attachment {
   uploadedAt   DateTime @default(now()) @map("uploaded_at")
 
   @@map("attachments")
+}
+
+// Tabelë legacy; task-et e reja nuk krijojnë rreshta këtu.
+model TaskVisibility {
+  id     String @id @default(uuid())
+  taskId String @map("task_id")
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@map("task_visibility")
 }
 
 model Comment {
