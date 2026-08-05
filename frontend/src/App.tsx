@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Login from './components/Login';
 import Navbar from './components/Navbar';
 import Dashboard from './components/Dashboard';
+import { readApiJson } from './lib/api';
 
 export interface User {
   id: string;
@@ -32,8 +33,8 @@ export default function App() {
       try {
         const response = await fetch('/api/auth/me', { credentials: 'include' });
         if (response.ok) {
-          const data = await response.json();
-          setUser(data.user);
+          const data = await readApiJson<{ user?: User }>(response);
+          setUser(data.user || null);
         } else {
           setUser(null);
         }
@@ -54,7 +55,7 @@ export default function App() {
     try {
       const res = await fetch('/api/notifications', { credentials: 'include' });
       if (res.ok) {
-        const data = await res.json();
+        const data = await readApiJson<{ notifications?: NotificationItem[] }>(res);
         setNotifications(data.notifications || []);
       }
     } catch (err) {

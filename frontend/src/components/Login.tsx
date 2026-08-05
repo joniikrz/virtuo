@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, LogIn, ShieldAlert, UserPlus } from 'lucide-react';
+import { apiErrorMessage, readApiJson } from '../lib/api';
 
 interface LoginProps {
   onLoginSuccess: (user: { id: string; email: string; firstName: string; lastName: string; role: string }) => void;
@@ -40,11 +41,12 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         credentials: 'include',
         body: JSON.stringify(mode === 'register' ? { email: email.trim(), password, firstName: firstName.trim(), lastName: lastName.trim() } : { email: email.trim(), password }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Nuk u krye kërkesa. Provo përsëri.');
+      const data = await readApiJson<{ user?: { id: string; email: string; firstName: string; lastName: string; role: string } }>(response);
+      if (!response.ok) throw new Error(apiErrorMessage(response, data, 'Nuk u krye kërkesa. Provo përsëri.'));
+      if (!data.user) throw new Error('Përgjigje e pavlefshme nga serveri. Provo përsëri.');
       onLoginSuccess(data.user);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Gabim lidhjeje me serverin.');
+      setError(err instanceof Error ? err.message : 'Nuk u lidhëm me serverin. Provo përsëri.');
     } finally {
       setLoading(false);
     }
