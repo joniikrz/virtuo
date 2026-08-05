@@ -22,10 +22,10 @@ export default function Dashboard({ currentUser }: DashboardProps) {
   const [activeSpace, setActiveSpace] = useState<Space | null>(null);
   const isSpaceOwner = Boolean(activeSpace && activeSpace.createdBy?.id === currentUser.id);
   const canManageActiveSpace = isSpaceOwner;
-  const canCreateTask = Boolean(activeSpace && (isAdmin || spaceMembers.some((member) => member.id === currentUser.id)));
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [spaceMembers, setSpaceMembers] = useState<User[]>([]);
+  const canCreateTask = Boolean(activeSpace && spaceMembers.some((member) => member.id === currentUser.id));
 
   const [showCreateSpace, setShowCreateSpace] = useState(false);
   const [showInviteMember, setShowInviteMember] = useState(false);
@@ -147,7 +147,9 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      setTasks([data, ...tasks]);
+      if (data.assignedToId === currentUser.id) {
+        setTasks((current) => [data, ...current]);
+      }
       setShowCreateTask(false);
       setSuccessMsg('Detyra u krijua me sukses.');
     } catch (err: any) {
@@ -167,8 +169,13 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      setTasks(tasks.map(t => t.id === selectedTask.id ? data : t));
-      setSelectedTask(data);
+      if (data.assignedToId === currentUser.id) {
+        setTasks((current) => current.map((task) => task.id === selectedTask.id ? data : task));
+        setSelectedTask(data);
+      } else {
+        setTasks((current) => current.filter((task) => task.id !== selectedTask.id));
+        setSelectedTask(null);
+      }
       setShowEditTask(false);
       setSuccessMsg('Detyra u përditësua me sukses.');
     } catch (err: any) {
@@ -429,7 +436,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       {selectedTask && (
         <TaskDetailModal
           task={selectedTask}
-          isAdmin={isAdmin || selectedTask.createdBy?.id === currentUser.id}
+          canEdit={selectedTask.createdBy?.id === currentUser.id}
           onClose={() => setSelectedTask(null)}
           onStatusChange={handleStatusChange}
           onFileUpload={handleFileUpload}

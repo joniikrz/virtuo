@@ -5,7 +5,7 @@ import CommentsSection from './CommentsSection';
 
 interface TaskDetailModalProps {
   task: Task;
-  isAdmin: boolean;
+  canEdit: boolean;
   onClose: () => void;
   onStatusChange: (taskId: string, newStatus: string) => void;
   onFileUpload: (taskId: string, file: File) => Promise<void>;
@@ -18,7 +18,7 @@ interface TaskDetailModalProps {
 
 export default function TaskDetailModal({ 
   task, 
-  isAdmin, 
+  canEdit,
   onClose, 
   onStatusChange, 
   onFileUpload, 
@@ -95,7 +95,7 @@ export default function TaskDetailModal({
           <div className="task-detail-section" style={{ marginBottom: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span className="task-detail-label">Përshkrimi</span>
-              {isAdmin && (
+              {canEdit && (
                 <button 
                   onClick={onEditClick}
                   className="btn btn-secondary btn-sm"

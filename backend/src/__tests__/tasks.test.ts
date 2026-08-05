@@ -18,6 +18,9 @@ vi.mock('../prisma', () => ({
       findUnique: vi.fn(),
       create: vi.fn(),
     },
+    attachment: {
+      findMany: vi.fn(),
+    },
     task: {
       create: vi.fn(),
       findMany: vi.fn(),
@@ -66,6 +69,11 @@ describe('Tasks API Tests', () => {
       spaceId: 'space-1',
       createdById: 'test-user-id',
     } as never);
+    vi.mocked(prisma.spaceMember.findUnique).mockResolvedValue({
+      id: 'sm-1',
+      spaceId: 'space-1',
+      userId: 'test-user-id',
+    } as never);
 
     const res = await request(app)
       .post('/api/spaces/space-1/tasks')
@@ -74,6 +82,7 @@ describe('Tasks API Tests', () => {
         title: 'Krijo UI në React',
         description: 'Stili Trello',
         deadline: '2026-12-31T12:00:00.000Z',
+        assignedToId: 'test-user-id',
       });
 
     expect(res.status).toBe(201);
@@ -149,6 +158,7 @@ describe('Tasks API Tests', () => {
     } as never);
 
     vi.mocked(prisma.task.delete).mockResolvedValue({} as never);
+    vi.mocked(prisma.attachment.findMany).mockResolvedValue([] as never);
 
     const res = await request(app)
       .delete('/api/tasks/task-1')

@@ -36,7 +36,7 @@ function validDate(value: unknown): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-async function spaceAccess(spaceId: string, userId: string, role: string) {
+async function spaceAccess(spaceId: string, userId: string) {
   const space = await prisma.space.findUnique({ where: { id: spaceId } });
   if (!space) return { space: null, isMember: false, isOwner: false, canView: false };
   const isOwner = space.createdById === userId;
@@ -44,10 +44,10 @@ async function spaceAccess(spaceId: string, userId: string, role: string) {
   return { space, isMember, isOwner, canView: isMember };
 }
 
-async function taskAccess(taskId: string, userId: string, role: string) {
+async function taskAccess(taskId: string, userId: string) {
   const task = await prisma.task.findUnique({ where: { id: taskId }, include: taskInclude });
   if (!task) return { task: null, canView: false, canManage: false, canChangeStatus: false };
-  const access = await spaceAccess(task.spaceId, userId, role);
+  const access = await spaceAccess(task.spaceId, userId);
   const isCreator = task.createdById === userId;
   const isAssignee = task.assignedToId === userId;
   const canManage = isCreator;
@@ -81,12 +81,11 @@ async function removeTaskFiles(filePaths: string[]) {
 
 router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
-  const role = req.user?.role || 'USER';
   const spaceId = req.params.spaceId || (req.query.spaceId as string | undefined);
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
   try {
     if (spaceId) {
-      const access = await spaceAccess(spaceId, userId, role);
+      const access = await spaceAccess(spaceId, userId);
       if (!access.canView) return res.status(403).json({ error: 'Nuk keni leje për këtë hapësirë' });
       const taskFilter = { spaceId, assignedToId: userId };
       return res.json(await prisma.task.findMany({ where: taskFilter, include: taskInclude, orderBy: { createdAt: 'desc' } }));
@@ -97,7 +96,6 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 
 router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
-  const role = req.user?.role || 'USER';
   const spaceId = req.params.spaceId || req.body.spaceId;
   const { title, description, status = 'TODO', priority = 'NORMAL', deadline, assignedToId } = req.body;
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
@@ -106,8 +104,8 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   if (!parsedDeadline) return res.status(400).json({ error: 'Afati i fundit nuk është i vlefshëm' });
   if (!validStatuses.has(status) || !validPriorities.has(priority)) return res.status(400).json({ error: 'Statusi ose prioriteti nuk është i vlefshëm' });
   try {
-    const access = await spaceAccess(spaceId, userId, role);
-    if (!(role === 'ADMIN' || access.isMember)) return res.status(403).json({ error: 'Duhet të jeni anëtar i hapësirës për të krijuar detyra' });
+    const access = await spaceAccess(spaceId, userId);
+    if (!access.isMember) return res.status(403).json({ error: 'Duhet të jeni anëtar i hapësirës për të krijuar detyra' });
     if (assignedToId && !(await prisma.spaceMember.findUnique({ where: { spaceId_userId: { spaceId, userId: assignedToId } } }))) return res.status(400).json({ error: 'Përdoruesi i caktuar duhet të jetë anëtar i hapësirës' });
     const task = await prisma.task.create({ data: { title: title.trim(), description, status, priority, deadline: parsedDeadline, spaceId, createdById: userId, assignedToId: assignedToId || null }, include: taskInclude });
     await createAssignmentNotification(task);
@@ -120,7 +118,7 @@ router.put('/:id/status', authenticateToken, async (req: AuthRequest, res: Respo
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
   if (!validStatuses.has(req.body.status)) return res.status(400).json({ error: 'Status i pavlefshëm' });
   try {
-    const access = await taskAccess(req.params.id, userId, req.user?.role || 'USER');
+    const access = await taskAccess(req.params.id, userId);
     if (!access.task) return res.status(404).json({ error: 'Detyra nuk u gjet' });
     if (!access.canView) return res.status(403).json({ error: 'Nuk keni leje të ndryshoni statusin' });
     const updated = await prisma.task.update({ where: { id: access.task.id }, data: { status: req.body.status }, include: taskInclude });
@@ -133,7 +131,7 @@ router.post('/:id/attachments', authenticateToken, upload.single('file'), async 
   const userId = req.user?.id;
   if (!userId || !req.file) return res.status(400).json({ error: 'Skedari është i detyrueshëm' });
   try {
-    const access = await taskAccess(req.params.id, userId, req.user?.role || 'USER');
+    const access = await taskAccess(req.params.id, userId);
     if (!access.task) return res.status(404).json({ error: 'Detyra nuk u gjet' });
     if (!access.canView) return res.status(403).json({ error: 'Nuk keni leje të ngarkoni skedarë' });
     return res.status(201).json(await prisma.attachment.create({ data: { taskId: access.task.id, fileName: req.file.originalname, filePath: req.file.path, fileSize: req.file.size, mimeType: req.file.mimetype, uploadedById: userId }, select: { id: true, fileName: true, fileSize: true, mimeType: true, uploadedAt: true } }));
@@ -143,7 +141,7 @@ router.post('/:id/attachments', authenticateToken, upload.single('file'), async 
 router.get('/:id/attachments/:attachmentId', authenticateToken, async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
-  const access = await taskAccess(req.params.id, userId, req.user?.role || 'USER');
+  const access = await taskAccess(req.params.id, userId);
   if (!access.task || !access.canView) return res.status(404).json({ error: 'Skedari nuk u gjet' });
   const attachment = await prisma.attachment.findFirst({ where: { id: req.params.attachmentId, taskId: access.task.id } });
   if (!attachment) return res.status(404).json({ error: 'Skedari nuk u gjet' });
@@ -157,7 +155,7 @@ router.post('/:id/comments', authenticateToken, async (req: AuthRequest, res: Re
   if (!content) return res.status(400).json({ error: 'Komenti nuk mund të jetë bosh' });
   if (content.length > 2000) return res.status(400).json({ error: 'Komenti mund të ketë maksimumi 2000 karaktere' });
   try {
-    const access = await taskAccess(req.params.id, userId, req.user?.role || 'USER');
+    const access = await taskAccess(req.params.id, userId);
     if (!access.task) return res.status(404).json({ error: 'Detyra nuk u gjet' });
     if (!access.canView) return res.status(403).json({ error: 'Nuk keni leje të komentoni këtë detyrë' });
     const comment = await prisma.comment.create({
@@ -176,14 +174,15 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
   const { title, description, status, priority, deadline, assignedToId } = req.body;
   if (status !== undefined && !validStatuses.has(status) || priority !== undefined && !validPriorities.has(priority)) return res.status(400).json({ error: 'Statusi ose prioriteti nuk është i vlefshëm' });
+  if (assignedToId !== undefined && (typeof assignedToId !== 'string' || !assignedToId)) return res.status(400).json({ error: 'Personi i caktuar është i detyrueshëm' });
   const parsedDeadline = deadline === undefined ? undefined : validDate(deadline);
   if (deadline !== undefined && !parsedDeadline) return res.status(400).json({ error: 'Afati i fundit nuk është i vlefshëm' });
   try {
-    const access = await taskAccess(req.params.id, userId, req.user?.role || 'USER');
+    const access = await taskAccess(req.params.id, userId);
     if (!access.task) return res.status(404).json({ error: 'Detyra nuk u gjet' });
     if (!access.canManage) return res.status(403).json({ error: 'Nuk keni leje të përditësoni detyrën' });
     if (assignedToId && !(await prisma.spaceMember.findUnique({ where: { spaceId_userId: { spaceId: access.task.spaceId, userId: assignedToId } } }))) return res.status(400).json({ error: 'Përdoruesi i caktuar duhet të jetë anëtar i hapësirës' });
-    const updated = await prisma.task.update({ where: { id: access.task.id }, data: { ...(typeof title === 'string' && { title: title.trim() }), ...(description !== undefined && { description }), ...(status !== undefined && { status }), ...(priority !== undefined && { priority }), ...(parsedDeadline && { deadline: parsedDeadline }), ...(assignedToId !== undefined && { assignedToId: assignedToId || null }) }, include: taskInclude });
+    const updated = await prisma.task.update({ where: { id: access.task.id }, data: { ...(typeof title === 'string' && { title: title.trim() }), ...(description !== undefined && { description }), ...(status !== undefined && { status }), ...(priority !== undefined && { priority }), ...(parsedDeadline && { deadline: parsedDeadline }), ...(assignedToId !== undefined && { assignedToId }) }, include: taskInclude });
     if (assignedToId && assignedToId !== access.task.assignedToId) await createAssignmentNotification(updated);
     if (access.task.status !== 'COMPLETED' && updated.status === 'COMPLETED') await createCompletionNotification(access.task, userId);
     return res.json(updated);
@@ -194,7 +193,7 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
   try {
-    const access = await taskAccess(req.params.id, userId, req.user?.role || 'USER');
+    const access = await taskAccess(req.params.id, userId);
     if (!access.task) return res.status(404).json({ error: 'Detyra nuk u gjet' });
     if (access.task.createdById !== userId) return res.status(403).json({ error: 'Vetëm krijuesi i detyrës mund ta fshijë' });
     const attachments = await prisma.attachment.findMany({ where: { taskId: access.task.id }, select: { filePath: true } });

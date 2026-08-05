@@ -92,13 +92,14 @@ export default function EditTaskModal({ task, spaceMembers, onClose, onSubmit, e
             </div>
             
             <div className="form-group">
-              <label>Caktoja Punonjësit (Opsional)</label>
+              <label>Caktoja një anëtari</label>
               <select 
                 className="input-field"
                 value={taskAssignee}
                 onChange={e => setTaskAssignee(e.target.value)}
+                required
               >
-                <option value="">I pacaktuar (Asnjë)</option>
+                <option value="">Zgjidh anëtarin...</option>
                 {spaceMembers.map(u => (
                   <option key={u.id} value={u.id}>
                     {u.firstName} {u.lastName}
