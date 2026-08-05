@@ -22,6 +22,14 @@ vi.mock('../prisma', () => ({
     },
     attachment: {
       findMany: vi.fn(),
+      findFirst: vi.fn(),
+      create: vi.fn(),
+      delete: vi.fn(),
+    },
+    comment: {
+      findFirst: vi.fn(),
+      create: vi.fn(),
+      delete: vi.fn(),
     },
     task: {
       create: vi.fn(),
@@ -172,5 +180,89 @@ describe('Tasks API Tests', () => {
     expect(res.body.message).toContain('u fshi me sukses');
     expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { taskId: 'task-1' } });
     expect(prisma.notification.deleteMany).toHaveBeenCalledBefore(vi.mocked(prisma.task.delete));
+  });
+
+  it('POST /api/tasks/:id/comments - Njofton pjesëmarrësit e tjerë të detyrës', async () => {
+    vi.mocked(prisma.task.findUnique).mockResolvedValue({
+      id: 'task-1',
+      title: 'Detyrë me ekip',
+      spaceId: 'space-1',
+      createdById: 'test-user-id',
+      createdBy: { id: 'test-user-id', firstName: 'Test', lastName: 'User', inAppNotifications: true },
+      assignedToId: 'assigned-user-id',
+      assignedTo: { id: 'assigned-user-id', firstName: 'Assigned', lastName: 'User', inAppNotifications: true },
+      assignees: [{ userId: 'assigned-user-id', user: { id: 'assigned-user-id', firstName: 'Assigned', lastName: 'User', inAppNotifications: true } }],
+    } as never);
+    vi.mocked(prisma.space.findUnique).mockResolvedValue({ id: 'space-1', createdById: 'test-user-id' } as never);
+    vi.mocked(prisma.comment.create).mockResolvedValue({
+      id: 'comment-1',
+      content: 'Po punoj në të.',
+      authorId: 'test-user-id',
+      author: { id: 'test-user-id', firstName: 'Test', lastName: 'User', role: { name: 'USER' } },
+    } as never);
+
+    const res = await request(app)
+      .post('/api/tasks/task-1/comments')
+      .set('Cookie', [`token=${mockToken}`])
+      .send({ content: 'Po punoj në të.' });
+
+    expect(res.status).toBe(201);
+    expect(prisma.notification.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: 'assigned-user-id',
+        taskId: 'task-1',
+        type: 'COMMENT_ADDED',
+        resourceType: 'COMMENT',
+        resourceId: 'comment-1',
+      }),
+    });
+  });
+
+  it('DELETE /api/tasks/:id/comments/:commentId - Fshin komentin dhe njoftimin e lidhur', async () => {
+    vi.mocked(prisma.task.findUnique).mockResolvedValue({
+      id: 'task-1',
+      title: 'Detyrë me koment',
+      spaceId: 'space-1',
+      createdById: 'test-user-id',
+      createdBy: { id: 'test-user-id', firstName: 'Test', lastName: 'User' },
+      assignedTo: null,
+      assignees: [],
+    } as never);
+    vi.mocked(prisma.space.findUnique).mockResolvedValue({ id: 'space-1', createdById: 'test-user-id' } as never);
+    vi.mocked(prisma.comment.findFirst).mockResolvedValue({ id: 'comment-1', taskId: 'task-1', authorId: 'test-user-id' } as never);
+    vi.mocked(prisma.comment.delete).mockResolvedValue({} as never);
+
+    const res = await request(app)
+      .delete('/api/tasks/task-1/comments/comment-1')
+      .set('Cookie', [`token=${mockToken}`]);
+
+    expect(res.status).toBe(200);
+    expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { resourceType: 'COMMENT', resourceId: 'comment-1' } });
+    expect(prisma.comment.delete).toHaveBeenCalledWith({ where: { id: 'comment-1' } });
+  });
+
+  it('DELETE /api/tasks/:id/attachments/:attachmentId - Fshin attachment-in dhe njoftimin e lidhur', async () => {
+    vi.mocked(prisma.task.findUnique).mockResolvedValue({
+      id: 'task-1',
+      title: 'Detyrë me skedar',
+      spaceId: 'space-1',
+      createdById: 'test-user-id',
+      createdBy: { id: 'test-user-id', firstName: 'Test', lastName: 'User' },
+      assignedTo: null,
+      assignees: [],
+    } as never);
+    vi.mocked(prisma.space.findUnique).mockResolvedValue({ id: 'space-1', createdById: 'test-user-id' } as never);
+    vi.mocked(prisma.attachment.findFirst).mockResolvedValue({
+      id: 'attachment-1', taskId: 'task-1', uploadedById: 'test-user-id', filePath: 'uploads/missing-test-file.txt',
+    } as never);
+    vi.mocked(prisma.attachment.delete).mockResolvedValue({} as never);
+
+    const res = await request(app)
+      .delete('/api/tasks/task-1/attachments/attachment-1')
+      .set('Cookie', [`token=${mockToken}`]);
+
+    expect(res.status).toBe(200);
+    expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { resourceType: 'ATTACHMENT', resourceId: 'attachment-1' } });
+    expect(prisma.attachment.delete).toHaveBeenCalledWith({ where: { id: 'attachment-1' } });
   });
 });

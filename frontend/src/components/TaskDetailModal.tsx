@@ -12,6 +12,9 @@ interface TaskDetailModalProps {
   uploadingFile: boolean;
   onEditClick: () => void;
   onAddComment: (taskId: string, content: string) => Promise<void>;
+  onDeleteComment: (taskId: string, commentId: string) => Promise<void>;
+  onDeleteAttachment: (taskId: string, attachmentId: string) => Promise<void>;
+  currentUserId: string;
   canDelete: boolean;
   onDelete: (taskId: string) => Promise<void>;
 }
@@ -25,14 +28,32 @@ export default function TaskDetailModal({
   uploadingFile,
   onEditClick,
   onAddComment,
+  onDeleteComment,
+  onDeleteAttachment,
+  currentUserId,
   canDelete,
   onDelete
 }: TaskDetailModalProps) {
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null);
+  const [attachmentError, setAttachmentError] = useState('');
   const assignedUsers = task.assignees?.length ? task.assignees.map((assignment) => assignment.user) : task.assignedTo ? [task.assignedTo] : [];
   
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       await onFileUpload(task.id, e.target.files[0]);
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    if (deletingAttachmentId) return;
+    setDeletingAttachmentId(attachmentId);
+    setAttachmentError('');
+    try {
+      await onDeleteAttachment(task.id, attachmentId);
+    } catch (error) {
+      setAttachmentError(error instanceof Error ? error.message : 'Skedari nuk u fshi. Provo përsëri.');
+    } finally {
+      setDeletingAttachmentId(null);
     }
   };
 
@@ -146,23 +167,46 @@ export default function TaskDetailModal({
                         {att.fileName}
                       </span>
                     </div>
-                    <a 
-                      href={`/api/tasks/${task.id}/attachments/${att.id}`} 
-                      download 
-                      className="btn btn-secondary btn-sm" 
-                      style={{ padding: '4px 8px' }}
-                    >
-                      <Download size={14} />
-                    </a>
+                    <div className="attachment-actions">
+                      <a
+                        href={`/api/tasks/${task.id}/attachments/${att.id}`}
+                        download
+                        className="btn btn-secondary btn-sm"
+                        style={{ padding: '4px 8px' }}
+                        aria-label={`Shkarko ${att.fileName}`}
+                        title="Shkarko"
+                      >
+                        <Download size={14} />
+                      </a>
+                      {(att.uploadedById === currentUserId || canEdit) && (
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm attachment-delete-btn"
+                          style={{ padding: '4px 8px' }}
+                          onClick={() => handleDeleteAttachment(att.id)}
+                          disabled={deletingAttachmentId === att.id}
+                          aria-label={`Fshij ${att.fileName}`}
+                          title="Fshij skedarin"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))
               ) : (
                 <span style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))' }}>Nuk ka skedarë të bashkëngjitur.</span>
               )}
+              {attachmentError && <span className="attachment-error" role="alert">{attachmentError}</span>}
             </div>
           </div>
 
-          <CommentsSection comments={task.comments || []} onAddComment={(content) => onAddComment(task.id, content)} />
+          <CommentsSection
+            comments={task.comments || []}
+            onAddComment={(content) => onAddComment(task.id, content)}
+            canDeleteComment={(comment) => comment.author.id === currentUserId || canEdit}
+            onDeleteComment={(commentId) => onDeleteComment(task.id, commentId)}
+          />
 
         </div>
         <div className="modal-footer">

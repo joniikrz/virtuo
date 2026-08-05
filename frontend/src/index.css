@@ -898,6 +898,14 @@ body.light-mode {
   --shadow-glow: 0 12px 30px -18px hsl(var(--primary) / .28);
 }
 
+.attachment-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.attachment-delete-btn, .comment-delete-btn { color: hsl(var(--accent-danger)); }
+.comment-delete-btn { width: 28px; height: 28px; display: grid; place-items: center; flex: 0 0 auto; padding: 0; border: 0; border-radius: 8px; color: hsl(var(--text-muted)); background: transparent; cursor: pointer; opacity: .55; transition: color .15s ease, background .15s ease, opacity .15s ease; }
+.comment-item:hover .comment-delete-btn, .comment-delete-btn:focus-visible { color: hsl(var(--accent-danger)); background: hsl(var(--accent-danger) / .09); opacity: 1; }
+.comment-delete-btn:disabled { cursor: wait; opacity: .35; }
+.attachment-delete-btn:disabled { cursor: wait; opacity: .45; }
+.attachment-error { color: hsl(var(--accent-danger)); font-size: .75rem; }
+
 :root[data-theme='dark'] {
   --bg-deep: 220 18% 10%; --bg-surface: 220 16% 14%; --bg-card: 220 16% 16%; --bg-glass: 220 16% 12% / .7; --bg-secondary: 220 16% 12%;
   --text-primary: 0 0% 96%; --text-secondary: 220 10% 70%; --text-muted: 220 10% 45%; --border-muted: 220 12% 20%; --border-light: 220 12% 26%;

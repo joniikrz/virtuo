@@ -388,6 +388,34 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     window.dispatchEvent(new Event('virtuo:data-change'));
   };
 
+  const handleDeleteComment = async (taskId: string, commentId: string) => {
+    if (!window.confirm('A dëshiron ta fshish këtë koment?')) return;
+    const res = await fetch(`/api/tasks/${taskId}/comments/${commentId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Komenti nuk u fshi');
+    const updateTask = (task: Task) => task.id === taskId
+      ? { ...task, comments: (task.comments || []).filter((comment) => comment.id !== commentId) }
+      : task;
+    setTasks((current) => current.map(updateTask));
+    setSelectedTask((current) => current && updateTask(current));
+    setSuccessMsg('Komenti u fshi.');
+    window.dispatchEvent(new Event('virtuo:data-change'));
+  };
+
+  const handleDeleteAttachment = async (taskId: string, attachmentId: string) => {
+    if (!window.confirm('A dëshiron ta fshish këtë skedar?')) return;
+    const res = await fetch(`/api/tasks/${taskId}/attachments/${attachmentId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Skedari nuk u fshi');
+    const updateTask = (task: Task) => task.id === taskId
+      ? { ...task, attachments: (task.attachments || []).filter((attachment) => attachment.id !== attachmentId) }
+      : task;
+    setTasks((current) => current.map(updateTask));
+    setSelectedTask((current) => current && updateTask(current));
+    setSuccessMsg('Skedari u fshi.');
+    window.dispatchEvent(new Event('virtuo:data-change'));
+  };
+
   const handleDeleteTask = async (taskId: string) => {
     if (!window.confirm('A dëshiron ta fshish këtë detyrë?')) return;
     const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
@@ -556,6 +584,9 @@ export default function Dashboard({ currentUser }: DashboardProps) {
           onFileUpload={handleFileUpload}
           uploadingFile={uploadingFile}
           onAddComment={handleAddComment}
+          onDeleteComment={handleDeleteComment}
+          onDeleteAttachment={handleDeleteAttachment}
+          currentUserId={currentUser.id}
           canDelete={selectedTask.createdBy?.id === currentUser.id}
           onDelete={handleDeleteTask}
           onEditClick={() => {

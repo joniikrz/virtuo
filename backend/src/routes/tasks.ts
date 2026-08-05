@@ -25,7 +25,7 @@ const taskInclude = {
   assignedTo: { select: { id: true, email: true, firstName: true, lastName: true, emailNotifications: true, inAppNotifications: true } },
   assignees: { include: { user: { select: { id: true, email: true, firstName: true, lastName: true, emailNotifications: true, inAppNotifications: true } } } },
   createdBy: { select: { id: true, email: true, firstName: true, lastName: true, emailNotifications: true, inAppNotifications: true } },
-  attachments: { select: { id: true, fileName: true, fileSize: true, mimeType: true, uploadedAt: true } },
+  attachments: { select: { id: true, fileName: true, fileSize: true, mimeType: true, uploadedById: true, uploadedAt: true } },
   comments: { include: { author: { select: { id: true, firstName: true, lastName: true, role: { select: { name: true } } } } }, orderBy: { createdAt: 'asc' } },
   tags: { include: { tag: true } },
   _count: { select: { comments: true } },
@@ -91,6 +91,44 @@ async function createCompletionNotification(task: any, completedBy: string) {
     : task.assignedTo ? `${task.assignedTo.firstName} ${task.assignedTo.lastName}` : 'Një anëtar';
   if (task.createdBy.emailNotifications) {
     await sendTaskCompletedEmail(task.createdBy.email, `${task.createdBy.firstName} ${task.createdBy.lastName}`, task.title, completedByNames);
+  }
+}
+
+async function createTaskActivityNotifications(
+  task: any,
+  actorId: string,
+  actorName: string,
+  activity: 'COMMENT' | 'ATTACHMENT',
+  resourceId: string,
+) {
+  const participants = [
+    task.createdBy,
+    ...(task.assignees?.length
+      ? task.assignees.map((assignment: any) => assignment.user)
+      : task.assignedTo ? [task.assignedTo] : []),
+  ];
+  const recipients = [...new Map(participants
+    .filter((participant: any) => participant?.id && participant.id !== actorId && participant.inAppNotifications !== false)
+    .map((participant: any) => [participant.id, participant])).values()] as any[];
+  const isComment = activity === 'COMMENT';
+
+  try {
+    await Promise.all(recipients.map((recipient) => prisma.notification.create({
+      data: {
+        userId: recipient.id,
+        taskId: task.id,
+        type: isComment ? 'COMMENT_ADDED' : 'ATTACHMENT_ADDED',
+        title: isComment ? 'Koment i ri' : 'Skedar i ri',
+        message: isComment
+          ? `${actorName} komentoi në detyrën: ${task.title}`
+          : `${actorName} bashkëngjiti një skedar në detyrën: ${task.title}`,
+        resourceType: activity,
+        resourceId,
+      },
+    })));
+  } catch (error) {
+    // Komenti/skedari mbetet funksional edhe nëse shërbimi i njoftimeve ka problem të përkohshëm.
+    console.error('Task activity notification error:', error);
   }
 }
 
@@ -164,10 +202,25 @@ router.post('/:id/attachments', authenticateToken, upload.single('file'), async 
   if (!userId || !req.file) return res.status(400).json({ error: 'Skedari është i detyrueshëm' });
   try {
     const access = await taskAccess(req.params.id, userId);
-    if (!access.task) return res.status(404).json({ error: 'Detyra nuk u gjet' });
-    if (!access.canView) return res.status(403).json({ error: 'Nuk keni leje të ngarkoni skedarë' });
-    return res.status(201).json(await prisma.attachment.create({ data: { taskId: access.task.id, fileName: req.file.originalname, filePath: req.file.path, fileSize: req.file.size, mimeType: req.file.mimetype, uploadedById: userId }, select: { id: true, fileName: true, fileSize: true, mimeType: true, uploadedAt: true } }));
-  } catch (error) { console.error('Upload attachment error:', error); return res.status(500).json({ error: 'Gabim gjatë ngarkimit të skedarit' }); }
+    if (!access.task || !access.canView) {
+      await fs.promises.unlink(req.file.path).catch(() => undefined);
+      if (!access.task) return res.status(404).json({ error: 'Detyra nuk u gjet' });
+      return res.status(403).json({ error: 'Nuk keni leje të ngarkoni skedarë' });
+    }
+    const attachment = await prisma.attachment.create({
+      data: { taskId: access.task.id, fileName: req.file.originalname, filePath: req.file.path, fileSize: req.file.size, mimeType: req.file.mimetype, uploadedById: userId },
+      select: { id: true, fileName: true, fileSize: true, mimeType: true, uploadedById: true, uploadedAt: true },
+    });
+    const actor = access.task.createdById === userId
+      ? access.task.createdBy
+      : access.task.assignees.find((assignment) => assignment.userId === userId)?.user || access.task.assignedTo;
+    await createTaskActivityNotifications(access.task, userId, `${actor?.firstName || ''} ${actor?.lastName || ''}`.trim() || 'Një anëtar', 'ATTACHMENT', attachment.id);
+    return res.status(201).json(attachment);
+  } catch (error) {
+    await fs.promises.unlink(req.file.path).catch(() => undefined);
+    console.error('Upload attachment error:', error);
+    return res.status(500).json({ error: 'Gabim gjatë ngarkimit të skedarit' });
+  }
 });
 
 router.get('/:id/attachments/:attachmentId', authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -178,6 +231,29 @@ router.get('/:id/attachments/:attachmentId', authenticateToken, async (req: Auth
   const attachment = await prisma.attachment.findFirst({ where: { id: req.params.attachmentId, taskId: access.task.id } });
   if (!attachment) return res.status(404).json({ error: 'Skedari nuk u gjet' });
   return res.download(attachment.filePath, attachment.fileName);
+});
+
+router.delete('/:id/attachments/:attachmentId', authenticateToken, async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
+  try {
+    const access = await taskAccess(req.params.id, userId);
+    if (!access.task || !access.canView) return res.status(404).json({ error: 'Skedari nuk u gjet' });
+    const attachment = await prisma.attachment.findFirst({ where: { id: req.params.attachmentId, taskId: access.task.id } });
+    if (!attachment) return res.status(404).json({ error: 'Skedari nuk u gjet' });
+    if (attachment.uploadedById !== userId && access.task.createdById !== userId) {
+      return res.status(403).json({ error: 'Vetëm ngarkuesi ose krijuesi i detyrës mund ta fshijë skedarin' });
+    }
+    await prisma.$transaction([
+      prisma.notification.deleteMany({ where: { resourceType: 'ATTACHMENT', resourceId: attachment.id } }),
+      prisma.attachment.delete({ where: { id: attachment.id } }),
+    ]);
+    await removeTaskFiles([attachment.filePath]);
+    return res.json({ message: 'Skedari u fshi me sukses' });
+  } catch (error) {
+    console.error('Delete attachment error:', error);
+    return res.status(500).json({ error: 'Gabim gjatë fshirjes së skedarit' });
+  }
 });
 
 router.post('/:id/comments', authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -194,10 +270,39 @@ router.post('/:id/comments', authenticateToken, async (req: AuthRequest, res: Re
       data: { taskId: access.task.id, authorId: userId, content },
       include: { author: { select: { id: true, firstName: true, lastName: true, role: { select: { name: true } } } } },
     });
+    await createTaskActivityNotifications(
+      access.task,
+      userId,
+      `${comment.author.firstName} ${comment.author.lastName}`,
+      'COMMENT',
+      comment.id,
+    );
     return res.status(201).json({ ...comment, author: { ...comment.author, role: comment.author.role.name } });
   } catch (error) {
     console.error('Create comment error:', error);
     return res.status(500).json({ error: 'Gabim gjatë krijimit të komentit' });
+  }
+});
+
+router.delete('/:id/comments/:commentId', authenticateToken, async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
+  try {
+    const access = await taskAccess(req.params.id, userId);
+    if (!access.task || !access.canView) return res.status(404).json({ error: 'Komenti nuk u gjet' });
+    const comment = await prisma.comment.findFirst({ where: { id: req.params.commentId, taskId: access.task.id } });
+    if (!comment) return res.status(404).json({ error: 'Komenti nuk u gjet' });
+    if (comment.authorId !== userId && access.task.createdById !== userId) {
+      return res.status(403).json({ error: 'Vetëm autori ose krijuesi i detyrës mund ta fshijë komentin' });
+    }
+    await prisma.$transaction([
+      prisma.notification.deleteMany({ where: { resourceType: 'COMMENT', resourceId: comment.id } }),
+      prisma.comment.delete({ where: { id: comment.id } }),
+    ]);
+    return res.json({ message: 'Komenti u fshi me sukses' });
+  } catch (error) {
+    console.error('Delete comment error:', error);
+    return res.status(500).json({ error: 'Gabim gjatë fshirjes së komentit' });
   }
 });
 

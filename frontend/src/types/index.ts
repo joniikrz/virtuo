@@ -30,6 +30,7 @@ export interface Attachment {
   fileName: string;
   fileSize: number;
   mimeType: string;
+  uploadedById?: string;
   uploadedAt: string;
 }
 
@@ -42,7 +43,7 @@ export interface Tag {
 export interface Comment {
   id: string;
   content: string;
-  author: { firstName: string; lastName: string; role: string; };
+  author: { id?: string; firstName: string; lastName: string; role: string | { name: string }; };
   createdAt: string;
 }
 

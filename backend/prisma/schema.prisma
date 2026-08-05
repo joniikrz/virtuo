@@ -171,16 +171,19 @@ model TaskTag {
 }
 
 model Notification {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type      String // TASK_ASSIGNED, TASK_COMPLETED, COMMENT_ADDED, DEADLINE_APPROACHING
-  title     String
-  message   String
-  isRead    Boolean  @default(false) @map("is_read")
-  taskId    String?  @map("task_id")
-  createdAt DateTime @default(now()) @map("created_at")
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type         String // TASK_ASSIGNED, TASK_COMPLETED, COMMENT_ADDED, ATTACHMENT_ADDED, DEADLINE_APPROACHING
+  title        String
+  message      String
+  isRead       Boolean  @default(false) @map("is_read")
+  taskId       String?  @map("task_id")
+  resourceType String?  @map("resource_type")
+  resourceId   String?  @map("resource_id")
+  createdAt    DateTime @default(now()) @map("created_at")
 
+  @@index([resourceType, resourceId])
   @@map("notifications")
 }
 
