@@ -116,47 +116,52 @@ export default function TaskFilters({ tasks, members, filters, resultCount, onCh
       {isOpen && (
         <div className="task-filter-popover" role="dialog" aria-label="Zgjidh filtrat">
           <div className="task-filter-popover__header">
+            <span className="task-filter-popover__icon"><SlidersHorizontal size={18} /></span>
             <div>
               <strong>Filtro detyrat</strong>
-              <span>{resultCount} nga {tasks.length} detyra</span>
+              <span>Zgjidh vetëm kriteret që të duhen</span>
             </div>
+            <span className="task-filter-popover__results">{resultCount}/{tasks.length}</span>
             <button type="button" onClick={() => setIsOpen(false)} aria-label="Mbyll filtrat"><X size={18} /></button>
           </div>
 
-          <div className="filter-choice-group">
-            <span>Statusi</span>
-            <div className="filter-choice-row">
-              {statusChoices.map((choice) => (
-                <button
-                  type="button"
-                  key={choice.value}
-                  className={filters.status === choice.value ? 'selected' : ''}
-                  onClick={() => updateFilter('status', choice.value)}
-                  aria-pressed={filters.status === choice.value}
-                >
-                  {filters.status === choice.value && <Check size={13} />}{choice.label}
-                </button>
-              ))}
+          <div className="filter-choice-panels">
+            <div className="filter-choice-group">
+              <span>Statusi</span>
+              <div className="filter-choice-row">
+                {statusChoices.map((choice) => (
+                  <button
+                    type="button"
+                    key={choice.value}
+                    className={filters.status === choice.value ? 'selected' : ''}
+                    onClick={() => updateFilter('status', choice.value)}
+                    aria-pressed={filters.status === choice.value}
+                  >
+                    {filters.status === choice.value && <Check size={13} />}{choice.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="filter-choice-group">
+              <span>Prioriteti</span>
+              <div className="filter-choice-row">
+                {priorityChoices.map((choice) => (
+                  <button
+                    type="button"
+                    key={choice.value}
+                    className={filters.priority === choice.value ? 'selected' : ''}
+                    onClick={() => updateFilter('priority', choice.value)}
+                    aria-pressed={filters.priority === choice.value}
+                  >
+                    {filters.priority === choice.value && <Check size={13} />}{choice.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          <div className="filter-choice-group">
-            <span>Prioriteti</span>
-            <div className="filter-choice-row">
-              {priorityChoices.map((choice) => (
-                <button
-                  type="button"
-                  key={choice.value}
-                  className={filters.priority === choice.value ? 'selected' : ''}
-                  onClick={() => updateFilter('priority', choice.value)}
-                  aria-pressed={filters.priority === choice.value}
-                >
-                  {filters.priority === choice.value && <Check size={13} />}{choice.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
+          <div className="task-filter-popover__section-title"><span>Filtra të tjerë</span><small>Kombinoji sipas nevojës</small></div>
           <div className="task-filter-popover__grid">
             <label>
               <span>Anëtari</span>

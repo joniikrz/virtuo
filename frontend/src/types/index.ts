@@ -54,6 +54,7 @@ export interface Task {
   priority: string; // LOW, NORMAL, HIGH, URGENT
   deadline: string;
   createdAt?: string;
+  updatedAt?: string;
   assignedTo: { id: string; email: string; firstName: string; lastName: string; } | null;
   assignedToId?: string | null;
   assignees: { id: string; user: { id: string; email: string; firstName: string; lastName: string; } }[];

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { User, Space, Task } from '../types';
 import { LockKeyhole, Plus, ShieldCheck, Trash2, UserPlus, Users, X } from 'lucide-react';
 import SpaceSidebar from './SpaceSidebar';
@@ -28,6 +28,16 @@ const isSameCalendarDay = (first: Date, second: Date) => (
   && first.getDate() === second.getDate()
 );
 
+const taskDataRevision = (spaceId: string, tasks: Task[]) => `${spaceId}|${tasks.map((task) => [
+  task.id,
+  task.updatedAt || '',
+  task.status,
+  task.comments?.length || 0,
+  task.comments?.[task.comments.length - 1]?.id || '',
+  task.attachments?.length || 0,
+  task.attachments?.[task.attachments.length - 1]?.id || '',
+].join(':')).join('|')}`;
+
 export default function Dashboard({ currentUser }: DashboardProps) {
   const isAdmin = currentUser.role === 'ADMIN';
 
@@ -52,6 +62,9 @@ export default function Dashboard({ currentUser }: DashboardProps) {
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [taskFilters, setTaskFilters] = useState<TaskFiltersState>(DEFAULT_TASK_FILTERS);
+  const activeSpaceIdRef = useRef<string | null>(null);
+  const tasksRevisionRef = useRef('');
+  activeSpaceIdRef.current = activeSpace?.id || null;
 
   const filteredTasks = useMemo(() => {
     const now = new Date();
@@ -127,15 +140,23 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     } catch (err) { console.error(err); }
   };
 
-  const fetchTasks = async (spaceId: string) => {
+  const fetchTasks = useCallback(async (spaceId: string) => {
     try {
-      const res = await fetch(`/api/spaces/${spaceId}/tasks`);
+      const res = await fetch(`/api/spaces/${spaceId}/tasks`, { cache: 'no-store' });
       if (res.ok) {
-        const data = await res.json();
+        const data: Task[] = await res.json();
+        if (activeSpaceIdRef.current !== spaceId) return;
+        const revision = taskDataRevision(spaceId, data);
+        if (tasksRevisionRef.current === revision) return;
+        tasksRevisionRef.current = revision;
         setTasks(data);
+        setSelectedTask((current) => {
+          if (!current) return null;
+          return data.find((task) => task.id === current.id) || null;
+        });
       }
     } catch (err) { console.error(err); }
-  };
+  }, []);
 
   const fetchSpaceMembers = async (spaceId: string) => {
     try {
@@ -154,11 +175,41 @@ export default function Dashboard({ currentUser }: DashboardProps) {
 
   useEffect(() => {
     if (activeSpace) {
+      tasksRevisionRef.current = '';
       setTaskFilters(DEFAULT_TASK_FILTERS);
-      fetchTasks(activeSpace.id);
-      fetchSpaceMembers(activeSpace.id);
+      void fetchTasks(activeSpace.id);
+      void fetchSpaceMembers(activeSpace.id);
+    } else {
+      setTasks([]);
+      setSelectedTask(null);
     }
-  }, [activeSpace]);
+  }, [activeSpace, fetchTasks]);
+
+  useEffect(() => {
+    if (!activeSpace) return;
+    let requestInFlight = false;
+    const refresh = async () => {
+      if (requestInFlight || document.visibilityState !== 'visible') return;
+      requestInFlight = true;
+      try {
+        await fetchTasks(activeSpace.id);
+      } finally {
+        requestInFlight = false;
+      }
+    };
+    const onFocus = () => void refresh();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+    const intervalId = window.setInterval(() => void refresh(), 5000);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [activeSpace, fetchTasks]);
 
   // Handlers
   const handleCreateSpace = async (name: string, memberIds: string[]) => {
@@ -218,6 +269,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       await fetchSpaces();
       setShowCreateTask(false);
       setSuccessMsg('Detyra u krijua me sukses.');
+      window.dispatchEvent(new Event('virtuo:data-change'));
     } catch (err: any) {
       setErrorMsg(err.message);
     }
@@ -239,6 +291,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       setSelectedTask(data);
       setShowEditTask(false);
       setSuccessMsg('Detyra u përditësua me sukses.');
+      window.dispatchEvent(new Event('virtuo:data-change'));
     } catch (err: any) {
       setErrorMsg(err.message);
     }
@@ -271,10 +324,9 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         body: JSON.stringify({ status: newStatus }),
       });
       if (res.ok) {
-        setTasks(tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
-        if (selectedTask && selectedTask.id === taskId) {
-          setSelectedTask({ ...selectedTask, status: newStatus });
-        }
+        setTasks((current) => current.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+        setSelectedTask((current) => current?.id === taskId ? { ...current, status: newStatus } : current);
+        window.dispatchEvent(new Event('virtuo:data-change'));
       }
     } catch (err) {
       console.error(err);
@@ -333,6 +385,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     const updateTask = (task: Task) => task.id === taskId ? { ...task, comments: [...(task.comments || []), data] } : task;
     setTasks((current) => current.map(updateTask));
     setSelectedTask((current) => current && updateTask(current));
+    window.dispatchEvent(new Event('virtuo:data-change'));
   };
 
   const handleDeleteTask = async (taskId: string) => {
@@ -344,6 +397,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     await fetchSpaces();
     setSelectedTask(null);
     setSuccessMsg('Detyra u fshi.');
+    window.dispatchEvent(new Event('virtuo:data-change'));
   };
 
   const handleDeleteSpace = async () => {

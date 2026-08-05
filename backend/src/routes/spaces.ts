@@ -358,7 +358,16 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
       where: { task: { spaceId } },
       select: { filePath: true },
     });
-    await prisma.space.delete({ where: { id: spaceId } });
+    const taskIds = await prisma.task.findMany({ where: { spaceId }, select: { id: true } });
+    const deleteSpace = prisma.space.delete({ where: { id: spaceId } });
+    if (taskIds.length > 0) {
+      await prisma.$transaction([
+        prisma.notification.deleteMany({ where: { taskId: { in: taskIds.map((task) => task.id) } } }),
+        deleteSpace,
+      ]);
+    } else {
+      await deleteSpace;
+    }
     await removeStoredFiles(attachments.map((attachment) => attachment.filePath));
     return res.json({ message: 'Hapësira u fshi me sukses' });
   } catch (error) {

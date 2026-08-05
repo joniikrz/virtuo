@@ -8,6 +8,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
 
 vi.mock('../prisma', () => ({
   default: {
+    $transaction: vi.fn(async (operations: unknown[]) => Promise.all(operations)),
     user: {
       findUnique: vi.fn(),
     },
@@ -28,6 +29,10 @@ vi.mock('../prisma', () => ({
       findUnique: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
+    },
+    notification: {
+      create: vi.fn(),
+      deleteMany: vi.fn(),
     },
   },
 }));
@@ -165,5 +170,7 @@ describe('Tasks API Tests', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.message).toContain('u fshi me sukses');
+    expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { taskId: 'task-1' } });
+    expect(prisma.notification.deleteMany).toHaveBeenCalledBefore(vi.mocked(prisma.task.delete));
   });
 });

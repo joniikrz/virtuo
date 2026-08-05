@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Send } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { MessageCircle, Send } from 'lucide-react';
 import { Comment } from '../types';
 
 interface CommentsSectionProps {
@@ -9,48 +9,82 @@ interface CommentsSectionProps {
 
 export default function CommentsSection({ comments, onAddComment }: CommentsSectionProps) {
   const [newComment, setNewComment] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const listRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newComment.trim()) return;
-    await onAddComment(newComment);
-    setNewComment('');
+  useEffect(() => {
+    const list = listRef.current;
+    if (list) list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' });
+  }, [comments.length, comments[comments.length - 1]?.id]);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const content = newComment.trim();
+    if (!content || sending) return;
+    setSending(true);
+    setError('');
+    try {
+      await onAddComment(content);
+      setNewComment('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Komenti nuk u ruajt. Provo përsëri.');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
-    <div className="comments-section" style={{ marginTop: '20px', borderTop: '1px solid hsl(var(--border))', paddingTop: '20px' }}>
-      <h4 style={{ marginBottom: '15px' }}>Komentet</h4>
-      
-      <div className="comments-list" style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px', maxHeight: '300px', overflowY: 'auto' }}>
-        {comments.map(c => (
-          <div key={c.id} className="comment-item" style={{ backgroundColor: 'hsl(var(--bg-secondary))', padding: '10px 14px', borderRadius: 'var(--border-radius-md)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{c.author.firstName} {c.author.lastName}</span>
-              <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>
-                {new Date(c.createdAt).toLocaleString('sq-AL', { dateStyle: 'short', timeStyle: 'short' })}
-              </span>
+    <section className="comments-section" aria-labelledby="comments-heading">
+      <header className="comments-header">
+        <span className="comments-header__icon"><MessageCircle size={17} /></span>
+        <div><h4 id="comments-heading">Biseda</h4><p>{comments.length} {comments.length === 1 ? 'koment' : 'komente'}</p></div>
+        <span className="comments-live"><i /> Live</span>
+      </header>
+
+      <div ref={listRef} className="comments-list" aria-live="polite">
+        {comments.map((comment) => (
+          <article key={comment.id} className="comment-item">
+            <span className="comment-avatar" aria-hidden="true">{comment.author.firstName.charAt(0)}{comment.author.lastName.charAt(0)}</span>
+            <div className="comment-body">
+              <div className="comment-meta">
+                <strong>{comment.author.firstName} {comment.author.lastName}</strong>
+                <span className="comment-role">{comment.author.role}</span>
+                <time dateTime={comment.createdAt}>{new Date(comment.createdAt).toLocaleString('sq-AL', { dateStyle: 'short', timeStyle: 'short' })}</time>
+              </div>
+              <p className="comment-text">{comment.content}</p>
             </div>
-            <p style={{ fontSize: '0.9rem', margin: 0, whiteSpace: 'pre-wrap' }}>{c.content}</p>
-          </div>
+          </article>
         ))}
         {comments.length === 0 && (
-          <p style={{ fontSize: '0.85rem', color: 'hsl(var(--text-muted))' }}>Nuk ka komente. Bëhu i pari që komenton!</p>
+          <div className="comments-empty"><MessageCircle size={24} /><strong>Ende nuk ka komente</strong><span>Fillo bisedën për këtë detyrë.</span></div>
         )}
       </div>
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '10px' }}>
-        <input 
-          type="text" 
-          className="input-field" 
+      <form ref={formRef} onSubmit={handleSubmit} className="comment-composer">
+        <textarea
+          className="input-field"
           value={newComment}
-          onChange={e => setNewComment(e.target.value)}
+          onChange={(event) => setNewComment(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              formRef.current?.requestSubmit();
+            }
+          }}
           placeholder="Shkruaj një koment..."
-          style={{ flex: 1 }}
+          rows={3}
+          maxLength={2000}
+          disabled={sending}
         />
-        <button type="submit" className="btn btn-primary" disabled={!newComment.trim()}>
-          <Send size={16} />
-        </button>
+        <div className="comment-composer__footer">
+          <span className={error ? 'error' : ''}>{error || `${newComment.length}/2000 · Enter për dërgim, Shift+Enter për rresht të ri`}</span>
+          <button type="submit" className="btn btn-primary btn-sm" disabled={!newComment.trim() || sending}>
+            <Send size={15} /> {sending ? 'Duke dërguar...' : 'Dërgo'}
+          </button>
+        </div>
       </form>
-    </div>
+    </section>
   );
 }

@@ -255,7 +255,10 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
     if (!access.task) return res.status(404).json({ error: 'Detyra nuk u gjet' });
     if (access.task.createdById !== userId) return res.status(403).json({ error: 'Vetëm krijuesi i detyrës mund ta fshijë' });
     const attachments = await prisma.attachment.findMany({ where: { taskId: access.task.id }, select: { filePath: true } });
-    await prisma.task.delete({ where: { id: access.task.id } });
+    await prisma.$transaction([
+      prisma.notification.deleteMany({ where: { taskId: access.task.id } }),
+      prisma.task.delete({ where: { id: access.task.id } }),
+    ]);
     await removeTaskFiles(attachments.map((attachment) => attachment.filePath));
     return res.json({ message: 'Detyra u fshi me sukses' });
   } catch (error) { console.error('Delete task error:', error); return res.status(500).json({ error: 'Gabim gjatë fshirjes së detyrës' }); }

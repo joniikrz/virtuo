@@ -67,11 +67,25 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
-    if (user) {
-      fetchNotifications();
-    } else {
+    if (!user) {
       setNotifications([]);
+      return;
     }
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void fetchNotifications();
+    };
+    void fetchNotifications();
+    const intervalId = window.setInterval(refreshWhenVisible, 8000);
+    window.addEventListener('focus', refreshWhenVisible);
+    window.addEventListener('virtuo:data-change', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', refreshWhenVisible);
+      window.removeEventListener('virtuo:data-change', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
   }, [user, fetchNotifications]);
 
   // 3. Dalja nga sistemi (Logout)
