@@ -50,6 +50,8 @@ export interface Task {
   priority: string; // LOW, NORMAL, HIGH, URGENT
   deadline: string;
   assignedTo: { id: string; email: string; firstName: string; lastName: string; } | null;
+  assignedToId?: string | null;
+  assignees: { id: string; user: { id: string; email: string; firstName: string; lastName: string; } }[];
   createdBy: { id?: string; firstName: string; lastName: string; };
   attachments: Attachment[];
   comments: Comment[];

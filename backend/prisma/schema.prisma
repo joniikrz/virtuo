@@ -30,6 +30,7 @@ model User {
   spacesCreated Space[]          @relation("SpaceCreator")
   spacesJoined  SpaceMember[]
   tasksAssigned Task[]           @relation("TaskAssignee")
+  taskAssignments TaskAssignee[]
   tasksCreated  Task[]           @relation("TaskCreator")
   attachments   Attachment[]
   taskVisibility TaskVisibility[]
@@ -78,6 +79,7 @@ model Task {
   space        Space            @relation(fields: [spaceId], references: [id], onDelete: Cascade)
   assignedToId String?          @map("assigned_to_id")
   assignedTo   User?            @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  assignees    TaskAssignee[]
   createdById  String           @map("created_by_id")
   createdBy    User             @relation("TaskCreator", fields: [createdById], references: [id])
   createdAt    DateTime         @default(now()) @map("created_at")
@@ -106,6 +108,18 @@ model Attachment {
   uploadedAt   DateTime @default(now()) @map("uploaded_at")
 
   @@map("attachments")
+}
+
+model TaskAssignee {
+  id        String   @id @default(uuid())
+  taskId    String   @map("task_id")
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  @@unique([taskId, userId])
+  @@map("task_assignees")
 }
 
 // Tabelë legacy; task-et e reja nuk krijojnë rreshta këtu.

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { User, Space } from '../types';
+import AssigneeSelector from './AssigneeSelector';
 
 interface CreateTaskModalProps {
   activeSpace: Space;
@@ -13,7 +14,7 @@ export default function CreateTaskModal({ activeSpace, spaceMembers, onClose, on
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDesc, setTaskDesc] = useState('');
   const [taskDeadline, setTaskDeadline] = useState('');
-  const [taskAssignee, setTaskAssignee] = useState('');
+  const [taskAssigneeIds, setTaskAssigneeIds] = useState<string[]>([]);
   const [taskPriority, setTaskPriority] = useState('NORMAL');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -22,7 +23,7 @@ export default function CreateTaskModal({ activeSpace, spaceMembers, onClose, on
       title: taskTitle,
       description: taskDesc,
       deadline: taskDeadline,
-      assignedToId: taskAssignee || null,
+      assignedToIds: taskAssigneeIds,
       priority: taskPriority,
     });
   };
@@ -31,7 +32,7 @@ export default function CreateTaskModal({ activeSpace, spaceMembers, onClose, on
     <div className="modal-overlay">
       <div className="modal-content">
         <div className="modal-header">
-          <h3>Shto Detyrë të Re</h3>
+          <h3>Krijo detyrë të re</h3>
           <button type="button" className="modal-close-btn" onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
@@ -39,7 +40,7 @@ export default function CreateTaskModal({ activeSpace, spaceMembers, onClose, on
             {errorMsg && <div style={{ color: 'hsl(var(--accent-danger))', marginBottom: '15px' }}>{errorMsg}</div>}
             
             <div className="form-group">
-              <label>Titulli i Detyrës</label>
+              <label>Titulli i detyrës</label>
               <input 
                 type="text" 
                 className="input-field" 
@@ -63,7 +64,7 @@ export default function CreateTaskModal({ activeSpace, spaceMembers, onClose, on
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div className="form-group">
-                <label>Afati i Fundit (Deadline)</label>
+                <label>Afati i fundit</label>
                 <input 
                   type="datetime-local" 
                   className="input-field" 
@@ -80,35 +81,20 @@ export default function CreateTaskModal({ activeSpace, spaceMembers, onClose, on
                   value={taskPriority}
                   onChange={e => setTaskPriority(e.target.value)}
                 >
-                  <option value="LOW">I ulët (LOW)</option>
-                  <option value="NORMAL">Normal (NORMAL)</option>
-                  <option value="HIGH">I lartë (HIGH)</option>
-                  <option value="URGENT">Urgjent (URGENT)</option>
+                  <option value="LOW">I ulët</option>
+                  <option value="NORMAL">Normal</option>
+                  <option value="HIGH">I lartë</option>
+                  <option value="URGENT">Urgjent</option>
                 </select>
               </div>
             </div>
             
-            <div className="form-group">
-              <label>Caktoja një anëtari</label>
-              <select 
-                className="input-field"
-                value={taskAssignee}
-                onChange={e => setTaskAssignee(e.target.value)}
-                required
-              >
-                <option value="">Zgjidh anëtarin...</option>
-                {spaceMembers.map(u => (
-                  <option key={u.id} value={u.id}>
-                    {u.firstName} {u.lastName}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <AssigneeSelector members={spaceMembers} selectedIds={taskAssigneeIds} onChange={setTaskAssigneeIds} />
 
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Anulo</button>
-            <button type="submit" className="btn btn-primary">Krijo Detyrë</button>
+            <button type="submit" className="btn btn-primary" disabled={taskAssigneeIds.length === 0}>Krijo detyrën</button>
           </div>
         </form>
       </div>

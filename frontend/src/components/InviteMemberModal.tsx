@@ -23,14 +23,14 @@ export default function InviteMemberModal({ activeSpace, users, spaceMembers, on
     <div className="modal-overlay">
       <div className="modal-content">
         <div className="modal-header">
-          <h3>Fto Anëtar te: {activeSpace.name}</h3>
+          <h3>Menaxho anëtarët: {activeSpace.name}</h3>
           <button type="button" className="modal-close-btn" onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
             {errorMsg && <div style={{ color: 'hsl(var(--accent-danger))', marginBottom: '15px' }}>{errorMsg}</div>}
             <div className="form-group">
-              <label>Zgjidh Përdoruesin</label>
+              <label>Shto një përdorues</label>
               <select 
                 className="input-field"
                 value={selectedInviteUser}
@@ -61,7 +61,7 @@ export default function InviteMemberModal({ activeSpace, users, spaceMembers, on
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Anulo</button>
-            <button type="submit" className="btn btn-primary">Fto Anëtar</button>
+            <button type="submit" className="btn btn-primary">Shto anëtarin</button>
           </div>
         </form>
       </div>

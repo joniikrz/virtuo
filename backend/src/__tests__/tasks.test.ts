@@ -16,6 +16,7 @@ vi.mock('../prisma', () => ({
     },
     spaceMember: {
       findUnique: vi.fn(),
+      count: vi.fn(),
       create: vi.fn(),
     },
     attachment: {
@@ -69,11 +70,7 @@ describe('Tasks API Tests', () => {
       spaceId: 'space-1',
       createdById: 'test-user-id',
     } as never);
-    vi.mocked(prisma.spaceMember.findUnique).mockResolvedValue({
-      id: 'sm-1',
-      spaceId: 'space-1',
-      userId: 'test-user-id',
-    } as never);
+    vi.mocked(prisma.spaceMember.count).mockResolvedValue(1);
 
     const res = await request(app)
       .post('/api/spaces/space-1/tasks')
@@ -82,7 +79,7 @@ describe('Tasks API Tests', () => {
         title: 'Krijo UI në React',
         description: 'Stili Trello',
         deadline: '2026-12-31T12:00:00.000Z',
-        assignedToId: 'test-user-id',
+        assignedToIds: ['test-user-id'],
       });
 
     expect(res.status).toBe(201);
@@ -132,6 +129,7 @@ describe('Tasks API Tests', () => {
       createdById: 'test-user-id',
       createdBy: { id: 'test-user-id', email: 'creator@virtuo.local', firstName: 'Creator', lastName: 'Name' },
       assignedTo: null,
+      assignees: [],
     } as never);
 
     vi.mocked(prisma.task.update).mockResolvedValue({
@@ -154,6 +152,7 @@ describe('Tasks API Tests', () => {
       id: 'task-1',
       createdById: 'test-user-id',
       attachments: [],
+      assignees: [],
       space: { createdById: 'test-user-id' },
     } as never);
 

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Bell, Check } from 'lucide-react';
+import React from 'react';
+import { Bell, Check, X } from 'lucide-react';
 import { Notification } from '../types';
 
 interface NotificationsPanelProps {
@@ -17,15 +17,12 @@ export default function NotificationsPanel({ notifications, onMarkAsRead, onMark
 
   return (
     <div className="notifications-dropdown" style={{
-      position: 'absolute',
-      top: '50px',
-      right: '20px',
-      width: '320px',
+      position: 'relative',
       backgroundColor: 'hsl(var(--bg-primary))',
       border: '1px solid hsl(var(--border))',
       borderRadius: 'var(--border-radius-md)',
       boxShadow: 'var(--shadow-lg)',
-      zIndex: 1000,
+      zIndex: 10,
       overflow: 'hidden'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid hsl(var(--border))' }}>
@@ -33,16 +30,20 @@ export default function NotificationsPanel({ notifications, onMarkAsRead, onMark
           <Bell size={16} /> Njoftimet
         </h4>
         {unreadCount > 0 && (
-          <button onClick={onMarkAllAsRead} className="btn btn-secondary btn-sm" style={{ padding: '4px 8px', fontSize: '0.75rem' }}>
-            <Check size={12} /> Lexo të gjitha
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <button onClick={onMarkAllAsRead} className="btn btn-secondary btn-sm" style={{ padding: '4px 8px', fontSize: '0.75rem' }}>
+              <Check size={12} /> Shënoji si të lexuara
+            </button>
+            <button type="button" className="modal-close-btn" onClick={onClose} aria-label="Mbyll njoftimet"><X size={16} /></button>
+          </div>
         )}
+        {unreadCount === 0 && <button type="button" className="modal-close-btn" onClick={onClose} aria-label="Mbyll njoftimet"><X size={16} /></button>}
       </div>
 
       <div style={{ maxHeight: '350px', overflowY: 'auto' }}>
         {notifications.length === 0 ? (
           <div style={{ padding: '20px', textAlign: 'center', color: 'hsl(var(--text-muted))', fontSize: '0.85rem' }}>
-            Nuk keni njoftime të reja.
+            Nuk ka njoftime.
           </div>
         ) : (
           notifications.map(n => (

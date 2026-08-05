@@ -10,6 +10,10 @@ interface TaskCardProps {
 export default function TaskCard({ task, onClick }: TaskCardProps) {
   const isCompleted = task.status === 'COMPLETED';
   const isOverdue = new Date(task.deadline) < new Date() && !isCompleted;
+  const assignedUsers = task.assignees?.length ? task.assignees.map((assignment) => assignment.user) : task.assignedTo ? [task.assignedTo] : [];
+  const assigneeLabel = assignedUsers.length > 2
+    ? `${assignedUsers[0].firstName}, ${assignedUsers[1].firstName} +${assignedUsers.length - 2}`
+    : assignedUsers.map((user) => `${user.firstName} ${user.lastName[0]}.`).join(', ');
 
   return (
     <div 
@@ -26,7 +30,7 @@ export default function TaskCard({ task, onClick }: TaskCardProps) {
       
       <div className="task-card-footer">
         <span className="task-card-assignee">
-          {task.assignedTo ? `${task.assignedTo.firstName} ${task.assignedTo.lastName[0]}.` : 'I pacaktuar'}
+          {assigneeLabel || 'I pacaktuar'}
         </span>
         <span className={`task-card-deadline ${isOverdue ? 'danger' : 'normal'}`}>
           {isCompleted ? (

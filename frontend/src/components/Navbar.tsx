@@ -57,13 +57,6 @@ export default function Navbar({ user, onLogout, notifications, onMarkAsRead, on
                 </span>
               )}
             </button>
-            <NotificationsPanel 
-              notifications={notifications} 
-              isOpen={showNotifications} 
-              onClose={() => setShowNotifications(false)}
-              onMarkAsRead={onMarkAsRead}
-              onMarkAllAsRead={onMarkAllAsRead}
-            />
           </div>
 
           <div 
@@ -84,6 +77,14 @@ export default function Navbar({ user, onLogout, notifications, onMarkAsRead, on
           </button>
         </div>
       </nav>
+
+      <NotificationsPanel
+        notifications={notifications}
+        isOpen={showNotifications}
+        onClose={() => setShowNotifications(false)}
+        onMarkAsRead={onMarkAsRead}
+        onMarkAllAsRead={onMarkAllAsRead}
+      />
       
       {showProfile && <ProfileModal user={user} onClose={() => setShowProfile(false)} />}
     </>

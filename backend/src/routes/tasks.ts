@@ -23,6 +23,7 @@ const upload = multer({
 
 const taskInclude = {
   assignedTo: { select: { id: true, email: true, firstName: true, lastName: true } },
+  assignees: { include: { user: { select: { id: true, email: true, firstName: true, lastName: true } } } },
   createdBy: { select: { id: true, email: true, firstName: true, lastName: true } },
   attachments: { select: { id: true, fileName: true, fileSize: true, mimeType: true, uploadedAt: true } },
   comments: { include: { author: { select: { id: true, firstName: true, lastName: true, role: { select: { name: true } } } } }, orderBy: { createdAt: 'asc' } },
@@ -34,6 +35,11 @@ function validDate(value: unknown): Date | null {
   if (typeof value !== 'string' || !value.trim()) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function parseAssignedUserIds(multipleValue: unknown, legacyValue: unknown): string[] {
+  const candidates: unknown[] = Array.isArray(multipleValue) ? multipleValue : [legacyValue];
+  return [...new Set(candidates.filter((id): id is string => typeof id === 'string' && id.length > 0))];
 }
 
 async function spaceAccess(spaceId: string, userId: string) {
@@ -49,18 +55,24 @@ async function taskAccess(taskId: string, userId: string) {
   if (!task) return { task: null, canView: false, canManage: false, canChangeStatus: false };
   const access = await spaceAccess(task.spaceId, userId);
   const isCreator = task.createdById === userId;
-  const isAssignee = task.assignedToId === userId;
+  const isAssignee = task.assignedToId === userId || task.assignees.some((assignment) => assignment.userId === userId);
   const canManage = isCreator;
   const canView = access.canView && (isCreator || isAssignee);
   return { task, canView, canManage, canChangeStatus: canManage || isAssignee };
 }
 
-async function createAssignmentNotification(task: any) {
-  if (!task.assignedTo || task.assignedTo.id === task.createdBy.id) return;
-  await prisma.notification.create({
-    data: { userId: task.assignedTo.id, taskId: task.id, type: 'TASK_ASSIGNED', title: 'Detyrë e re', message: `Ju është caktuar detyra: ${task.title}` },
-  });
-  await sendTaskAssignedEmail(task.assignedTo.email, `${task.assignedTo.firstName} ${task.assignedTo.lastName}`, task.title, `${task.createdBy.firstName} ${task.createdBy.lastName}`, task.deadline);
+async function createAssignmentNotifications(task: any, onlyUserIds?: Set<string>) {
+  const assignedUsers = task.assignees?.length
+    ? task.assignees.map((assignment: any) => assignment.user)
+    : task.assignedTo ? [task.assignedTo] : [];
+  await Promise.all(assignedUsers
+    .filter((user: any) => user.id !== task.createdBy.id && (!onlyUserIds || onlyUserIds.has(user.id)))
+    .map(async (user: any) => {
+      await prisma.notification.create({
+        data: { userId: user.id, taskId: task.id, type: 'TASK_ASSIGNED', title: 'Detyrë e re', message: `Ju është caktuar detyra: ${task.title}` },
+      });
+      await sendTaskAssignedEmail(user.email, `${user.firstName} ${user.lastName}`, task.title, `${task.createdBy.firstName} ${task.createdBy.lastName}`, task.deadline);
+    }));
 }
 
 async function createCompletionNotification(task: any, completedBy: string) {
@@ -68,7 +80,10 @@ async function createCompletionNotification(task: any, completedBy: string) {
   await prisma.notification.create({
     data: { userId: task.createdBy.id, taskId: task.id, type: 'TASK_COMPLETED', title: 'Detyrë e përfunduar', message: `Detyra u përfundua: ${task.title}` },
   });
-  await sendTaskCompletedEmail(task.createdBy.email, `${task.createdBy.firstName} ${task.createdBy.lastName}`, task.title, task.assignedTo ? `${task.assignedTo.firstName} ${task.assignedTo.lastName}` : 'Një anëtar');
+  const completedByNames = task.assignees?.length
+    ? task.assignees.map((assignment: any) => `${assignment.user.firstName} ${assignment.user.lastName}`).join(', ')
+    : task.assignedTo ? `${task.assignedTo.firstName} ${task.assignedTo.lastName}` : 'Një anëtar';
+  await sendTaskCompletedEmail(task.createdBy.email, `${task.createdBy.firstName} ${task.createdBy.lastName}`, task.title, completedByNames);
 }
 
 async function removeTaskFiles(filePaths: string[]) {
@@ -87,28 +102,37 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
     if (spaceId) {
       const access = await spaceAccess(spaceId, userId);
       if (!access.canView) return res.status(403).json({ error: 'Nuk keni leje për këtë hapësirë' });
-      const taskFilter = { spaceId, assignedToId: userId };
+      const taskFilter = { spaceId, OR: [{ createdById: userId }, { assignedToId: userId }, { assignees: { some: { userId } } }] };
       return res.json(await prisma.task.findMany({ where: taskFilter, include: taskInclude, orderBy: { createdAt: 'desc' } }));
     }
-    return res.json(await prisma.task.findMany({ where: { assignedToId: userId }, include: taskInclude, orderBy: { createdAt: 'desc' } }));
+    return res.json(await prisma.task.findMany({ where: { OR: [{ createdById: userId }, { assignedToId: userId }, { assignees: { some: { userId } } }] }, include: taskInclude, orderBy: { createdAt: 'desc' } }));
   } catch (error) { console.error('Fetch tasks error:', error); return res.status(500).json({ error: 'Gabim gjatë marrjes së detyrave' }); }
 });
 
 router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   const spaceId = req.params.spaceId || req.body.spaceId;
-  const { title, description, status = 'TODO', priority = 'NORMAL', deadline, assignedToId } = req.body;
+  const { title, description, status = 'TODO', priority = 'NORMAL', deadline } = req.body;
+  const assignedToIds = parseAssignedUserIds(req.body.assignedToIds, req.body.assignedToId);
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
-  if (typeof title !== 'string' || !title.trim() || typeof spaceId !== 'string' || typeof assignedToId !== 'string' || !assignedToId) return res.status(400).json({ error: 'Titulli, hapësira dhe personi i caktuar janë të detyrueshëm' });
+  if (typeof title !== 'string' || !title.trim() || typeof spaceId !== 'string' || assignedToIds.length === 0) return res.status(400).json({ error: 'Titulli, hapësira dhe së paku një person i caktuar janë të detyrueshëm' });
   const parsedDeadline = validDate(deadline);
   if (!parsedDeadline) return res.status(400).json({ error: 'Afati i fundit nuk është i vlefshëm' });
   if (!validStatuses.has(status) || !validPriorities.has(priority)) return res.status(400).json({ error: 'Statusi ose prioriteti nuk është i vlefshëm' });
   try {
     const access = await spaceAccess(spaceId, userId);
     if (!access.isMember) return res.status(403).json({ error: 'Duhet të jeni anëtar i hapësirës për të krijuar detyra' });
-    if (assignedToId && !(await prisma.spaceMember.findUnique({ where: { spaceId_userId: { spaceId, userId: assignedToId } } }))) return res.status(400).json({ error: 'Përdoruesi i caktuar duhet të jetë anëtar i hapësirës' });
-    const task = await prisma.task.create({ data: { title: title.trim(), description, status, priority, deadline: parsedDeadline, spaceId, createdById: userId, assignedToId: assignedToId || null }, include: taskInclude });
-    await createAssignmentNotification(task);
+    const memberCount = await prisma.spaceMember.count({ where: { spaceId, userId: { in: assignedToIds } } });
+    if (memberCount !== assignedToIds.length) return res.status(400).json({ error: 'Të gjithë personat e caktuar duhet të jenë anëtarë të hapësirës' });
+    const task = await prisma.task.create({
+      data: {
+        title: title.trim(), description, status, priority, deadline: parsedDeadline, spaceId, createdById: userId,
+        assignedToId: assignedToIds[0],
+        assignees: { create: assignedToIds.map((assignedUserId) => ({ userId: assignedUserId })) },
+      },
+      include: taskInclude,
+    });
+    await createAssignmentNotifications(task);
     return res.status(201).json(task);
   } catch (error) { console.error('Create task error:', error); return res.status(500).json({ error: 'Gabim gjatë krijimit të detyrës' }); }
 });
@@ -172,18 +196,44 @@ router.post('/:id/comments', authenticateToken, async (req: AuthRequest, res: Re
 router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
-  const { title, description, status, priority, deadline, assignedToId } = req.body;
+  const { title, description, status, priority, deadline } = req.body;
+  const hasAssignmentUpdate = Array.isArray(req.body.assignedToIds) || req.body.assignedToId !== undefined;
+  const assignedToIds = parseAssignedUserIds(req.body.assignedToIds, req.body.assignedToId);
   if (status !== undefined && !validStatuses.has(status) || priority !== undefined && !validPriorities.has(priority)) return res.status(400).json({ error: 'Statusi ose prioriteti nuk është i vlefshëm' });
-  if (assignedToId !== undefined && (typeof assignedToId !== 'string' || !assignedToId)) return res.status(400).json({ error: 'Personi i caktuar është i detyrueshëm' });
+  if (hasAssignmentUpdate && assignedToIds.length === 0) return res.status(400).json({ error: 'Së paku një person i caktuar është i detyrueshëm' });
   const parsedDeadline = deadline === undefined ? undefined : validDate(deadline);
   if (deadline !== undefined && !parsedDeadline) return res.status(400).json({ error: 'Afati i fundit nuk është i vlefshëm' });
   try {
     const access = await taskAccess(req.params.id, userId);
     if (!access.task) return res.status(404).json({ error: 'Detyra nuk u gjet' });
     if (!access.canManage) return res.status(403).json({ error: 'Nuk keni leje të përditësoni detyrën' });
-    if (assignedToId && !(await prisma.spaceMember.findUnique({ where: { spaceId_userId: { spaceId: access.task.spaceId, userId: assignedToId } } }))) return res.status(400).json({ error: 'Përdoruesi i caktuar duhet të jetë anëtar i hapësirës' });
-    const updated = await prisma.task.update({ where: { id: access.task.id }, data: { ...(typeof title === 'string' && { title: title.trim() }), ...(description !== undefined && { description }), ...(status !== undefined && { status }), ...(priority !== undefined && { priority }), ...(parsedDeadline && { deadline: parsedDeadline }), ...(assignedToId !== undefined && { assignedToId }) }, include: taskInclude });
-    if (assignedToId && assignedToId !== access.task.assignedToId) await createAssignmentNotification(updated);
+    if (hasAssignmentUpdate) {
+      const memberCount = await prisma.spaceMember.count({ where: { spaceId: access.task.spaceId, userId: { in: assignedToIds } } });
+      if (memberCount !== assignedToIds.length) return res.status(400).json({ error: 'Të gjithë personat e caktuar duhet të jenë anëtarë të hapësirës' });
+    }
+    const previousAssigneeIds = new Set([
+      ...access.task.assignees.map((assignment) => assignment.userId),
+      ...(access.task.assignedToId ? [access.task.assignedToId] : []),
+    ]);
+    const updated = await prisma.task.update({
+      where: { id: access.task.id },
+      data: {
+        ...(typeof title === 'string' && { title: title.trim() }),
+        ...(description !== undefined && { description }),
+        ...(status !== undefined && { status }),
+        ...(priority !== undefined && { priority }),
+        ...(parsedDeadline && { deadline: parsedDeadline }),
+        ...(hasAssignmentUpdate && {
+          assignedToId: assignedToIds[0],
+          assignees: { deleteMany: {}, create: assignedToIds.map((assignedUserId) => ({ userId: assignedUserId })) },
+        }),
+      },
+      include: taskInclude,
+    });
+    if (hasAssignmentUpdate) {
+      const newAssigneeIds = new Set(assignedToIds.filter((id) => !previousAssigneeIds.has(id)));
+      await createAssignmentNotifications(updated, newAssigneeIds);
+    }
     if (access.task.status !== 'COMPLETED' && updated.status === 'COMPLETED') await createCompletionNotification(access.task, userId);
     return res.json(updated);
   } catch (error) { console.error('Update task error:', error); return res.status(500).json({ error: 'Gabim gjatë përditësimit të detyrës' }); }

@@ -28,6 +28,7 @@ export default function TaskDetailModal({
   canDelete,
   onDelete
 }: TaskDetailModalProps) {
+  const assignedUsers = task.assignees?.length ? task.assignees.map((assignment) => assignment.user) : task.assignedTo ? [task.assignedTo] : [];
   
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -48,7 +49,7 @@ export default function TaskDetailModal({
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
             <div>
-              <span className="task-detail-label">Statusi i Detyrës</span>
+              <span className="task-detail-label">Statusi i detyrës</span>
               <div style={{ marginTop: '6px' }}>
                 <select
                   className="input-field"
@@ -56,9 +57,9 @@ export default function TaskDetailModal({
                   onChange={e => onStatusChange(task.id, e.target.value)}
                   style={{ padding: '6px 12px', fontSize: '0.85rem' }}
                 >
-                  <option value="TODO">Për t'u bërë (TODO)</option>
-                  <option value="IN_PROGRESS">Në proces (IN PROGRESS)</option>
-                  <option value="COMPLETED">E përfunduar (COMPLETED)</option>
+                  <option value="TODO">Për t'u bërë</option>
+                  <option value="IN_PROGRESS">Në proces</option>
+                  <option value="COMPLETED">E përfunduar</option>
                 </select>
               </div>
             </div>
@@ -79,9 +80,9 @@ export default function TaskDetailModal({
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
             <div>
-              <span className="task-detail-label">I Caktuar</span>
+              <span className="task-detail-label">Anëtarët e caktuar</span>
               <p style={{ marginTop: '6px', fontSize: '0.95rem' }}>
-                {task.assignedTo ? `${task.assignedTo.firstName} ${task.assignedTo.lastName}` : 'I pacaktuar'}
+                {assignedUsers.length ? assignedUsers.map((user) => `${user.firstName} ${user.lastName}`).join(', ') : 'I pacaktuar'}
               </p>
             </div>
             <div>

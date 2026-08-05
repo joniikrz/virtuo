@@ -147,9 +147,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      if (data.assignedToId === currentUser.id) {
-        setTasks((current) => [data, ...current]);
-      }
+      setTasks((current) => [data, ...current]);
       setShowCreateTask(false);
       setSuccessMsg('Detyra u krijua me sukses.');
     } catch (err: any) {
@@ -169,13 +167,8 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      if (data.assignedToId === currentUser.id) {
-        setTasks((current) => current.map((task) => task.id === selectedTask.id ? data : task));
-        setSelectedTask(data);
-      } else {
-        setTasks((current) => current.filter((task) => task.id !== selectedTask.id));
-        setSelectedTask(null);
-      }
+      setTasks((current) => current.map((task) => task.id === selectedTask.id ? data : task));
+      setSelectedTask(data);
       setShowEditTask(false);
       setSuccessMsg('Detyra u përditësua me sukses.');
     } catch (err: any) {
@@ -345,7 +338,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                   {canManageActiveSpace && (
                     <button onClick={() => { setErrorMsg(''); setShowInviteMember(true); }} className="btn btn-secondary">
                       <UserPlus size={18} />
-                      <span>Fto Anëtar</span>
+                      <span>Menaxho anëtarët</span>
                     </button>
                   )}
                   {isSpaceOwner && (
