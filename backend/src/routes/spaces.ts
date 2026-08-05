@@ -328,12 +328,11 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
 
 /**
  * DELETE /api/spaces/:id
- * Fshin një space - Krijuesi ose Admini
+ * Fshin një space - vetëm krijuesi
  */
 router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
   const spaceId = req.params.id;
   const userId = req.user?.id;
-  const role = req.user?.role;
 
   try {
     const space = await prisma.space.findUnique({ where: { id: spaceId } });
@@ -341,7 +340,7 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
       return res.status(404).json({ error: 'Hapësira e punës nuk u gjet' });
     }
 
-    if (role !== 'ADMIN' && space.createdById !== userId) {
+    if (space.createdById !== userId) {
       return res.status(403).json({ error: 'Nuk keni të drejtë të fshini këtë hapësirë' });
     }
 

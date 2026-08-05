@@ -80,9 +80,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
     if (spaceId) {
       const access = await spaceAccess(spaceId, userId, role);
       if (!access.canView) return res.status(403).json({ error: 'Nuk keni leje për këtë hapësirë' });
-      const taskFilter = role === 'ADMIN'
-        ? { spaceId }
-        : { spaceId, OR: [{ createdById: userId }, { assignedToId: userId }] };
+      const taskFilter = { spaceId, assignedToId: userId };
       return res.json(await prisma.task.findMany({ where: taskFilter, include: taskInclude, orderBy: { createdAt: 'desc' } }));
     }
     return res.json(await prisma.task.findMany({ where: { assignedToId: userId }, include: taskInclude, orderBy: { createdAt: 'desc' } }));
@@ -95,7 +93,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   const spaceId = req.params.spaceId || req.body.spaceId;
   const { title, description, status = 'TODO', priority = 'NORMAL', deadline, assignedToId } = req.body;
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
-  if (typeof title !== 'string' || !title.trim() || typeof spaceId !== 'string') return res.status(400).json({ error: 'Titulli dhe hapësira janë të detyrueshme' });
+  if (typeof title !== 'string' || !title.trim() || typeof spaceId !== 'string' || typeof assignedToId !== 'string' || !assignedToId) return res.status(400).json({ error: 'Titulli, hapësira dhe personi i caktuar janë të detyrueshëm' });
   const parsedDeadline = validDate(deadline);
   if (!parsedDeadline) return res.status(400).json({ error: 'Afati i fundit nuk është i vlefshëm' });
   if (!validStatuses.has(status) || !validPriorities.has(priority)) return res.status(400).json({ error: 'Statusi ose prioriteti nuk është i vlefshëm' });
@@ -190,7 +188,7 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
   try {
     const access = await taskAccess(req.params.id, userId, req.user?.role || 'USER');
     if (!access.task) return res.status(404).json({ error: 'Detyra nuk u gjet' });
-    if (!access.canManage) return res.status(403).json({ error: 'Nuk keni leje të fshini detyrën' });
+    if (access.task.createdById !== userId) return res.status(403).json({ error: 'Vetëm krijuesi i detyrës mund ta fshijë' });
     await prisma.task.delete({ where: { id: access.task.id } });
     return res.json({ message: 'Detyra u fshi me sukses' });
   } catch (error) { console.error('Delete task error:', error); return res.status(500).json({ error: 'Gabim gjatë fshirjes së detyrës' }); }

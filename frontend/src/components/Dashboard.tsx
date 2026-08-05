@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Space, Task, Notification } from '../types';
-import { Unlock, Plus, UserPlus, X } from 'lucide-react';
+import { Unlock, Plus, UserPlus, X, Trash2 } from 'lucide-react';
 import SpaceSidebar from './SpaceSidebar';
 import TaskBoard from './TaskBoard';
 import TaskDetailModal from './TaskDetailModal';
@@ -21,6 +21,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [activeSpace, setActiveSpace] = useState<Space | null>(null);
   const canManageActiveSpace = Boolean(activeSpace && (isAdmin || activeSpace.createdBy?.id === currentUser.id));
+  const isSpaceOwner = Boolean(activeSpace && activeSpace.createdBy?.id === currentUser.id);
   const canCreateTask = Boolean(activeSpace && (isAdmin || spaceMembers.some((member) => member.id === currentUser.id)));
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -266,6 +267,29 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     setSelectedTask((current) => current && updateTask(current));
   };
 
+  const handleDeleteTask = async (taskId: string) => {
+    if (!window.confirm('A dëshiron ta fshish këtë detyrë?')) return;
+    const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Detyra nuk u fshi');
+    setTasks((current) => current.filter((task) => task.id !== taskId));
+    setSelectedTask(null);
+    setSuccessMsg('Detyra u fshi.');
+  };
+
+  const handleDeleteSpace = async () => {
+    if (!activeSpace || !window.confirm(`A dëshiron ta fshish hapësirën "${activeSpace.name}" dhe të gjitha detyrat e saj?`)) return;
+    const spaceId = activeSpace.id;
+    const res = await fetch(`/api/spaces/${spaceId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) { setErrorMsg(data.error || 'Hapësira nuk u fshi'); return; }
+    setSpaces((current) => current.filter((space) => space.id !== spaceId));
+    setActiveSpace(null);
+    setTasks([]);
+    setSpaceMembers([]);
+    setSuccessMsg('Hapësira dhe të dhënat e lidhura u fshinë.');
+  };
+
   return (
     <div className="dashboard-layout" style={{ display: 'flex', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
       
@@ -315,6 +339,12 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                     <button onClick={() => { setErrorMsg(''); setShowInviteMember(true); }} className="btn btn-secondary">
                       <UserPlus size={18} />
                       <span>Fto Anëtar</span>
+                    </button>
+                  )}
+                  {isSpaceOwner && (
+                    <button onClick={handleDeleteSpace} className="btn btn-secondary" style={{ color: 'hsl(var(--accent-danger))' }}>
+                      <Trash2 size={18} />
+                      <span>Fshij Hapësirën</span>
                     </button>
                   )}
                   {canCreateTask && (
@@ -405,6 +435,8 @@ export default function Dashboard({ currentUser }: DashboardProps) {
           onFileUpload={handleFileUpload}
           uploadingFile={uploadingFile}
           onAddComment={handleAddComment}
+          canDelete={selectedTask.createdBy?.id === currentUser.id}
+          onDelete={handleDeleteTask}
           onEditClick={() => {
             setErrorMsg('');
             setShowEditTask(true);

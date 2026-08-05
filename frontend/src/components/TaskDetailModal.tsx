@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, Paperclip, FileUp, FileText, Download, Edit } from 'lucide-react';
+import { Calendar, Paperclip, FileUp, FileText, Download, Edit, Trash2 } from 'lucide-react';
 import { Task } from '../types';
 import CommentsSection from './CommentsSection';
 
@@ -12,6 +12,8 @@ interface TaskDetailModalProps {
   uploadingFile: boolean;
   onEditClick: () => void;
   onAddComment: (taskId: string, content: string) => Promise<void>;
+  canDelete: boolean;
+  onDelete: (taskId: string) => Promise<void>;
 }
 
 export default function TaskDetailModal({ 
@@ -22,7 +24,9 @@ export default function TaskDetailModal({
   onFileUpload, 
   uploadingFile,
   onEditClick,
-  onAddComment
+  onAddComment,
+  canDelete,
+  onDelete
 }: TaskDetailModalProps) {
   
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -161,6 +165,7 @@ export default function TaskDetailModal({
 
         </div>
         <div className="modal-footer">
+          {canDelete && <button type="button" className="btn btn-secondary" style={{ color: 'hsl(var(--accent-danger))' }} onClick={() => onDelete(task.id)}><Trash2 size={16} /> Fshij Detyrën</button>}
           <button type="button" className="btn btn-secondary" onClick={onClose}>Mbyll</button>
         </div>
       </div>

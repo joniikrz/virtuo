@@ -40,9 +40,8 @@ model User {
 model Space {
   id          String        @id @default(uuid())
   name        String
-  description String?
   color       String        @default("#0079BF")
-  isPrivate   Boolean       @default(false) @map("is_private")
+  isPrivate   Boolean       @default(true) @map("is_private")
   createdById String        @map("created_by_id")
   createdBy   User          @relation("SpaceCreator", fields: [createdById], references: [id])
   createdAt   DateTime      @default(now()) @map("created_at")
