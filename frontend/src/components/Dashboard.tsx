@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { User, Space, Task, Notification } from '../types';
-import { Unlock, Plus, UserPlus, X, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { User, Space, Task } from '../types';
+import { LockKeyhole, Plus, ShieldCheck, Trash2, UserPlus, Users, X } from 'lucide-react';
 import SpaceSidebar from './SpaceSidebar';
 import TaskBoard from './TaskBoard';
 import TaskDetailModal from './TaskDetailModal';
@@ -10,10 +10,23 @@ import CreateSpaceModal from './CreateSpaceModal';
 import InviteMemberModal from './InviteMemberModal';
 import RegisterUserModal from './RegisterUserModal';
 import StatsPanel from './StatsPanel';
+import TaskFilters, { DEFAULT_TASK_FILTERS, TaskFiltersState } from './TaskFilters';
 
 interface DashboardProps {
   currentUser: User;
 }
+
+const priorityWeight: Record<string, number> = { LOW: 1, NORMAL: 2, HIGH: 3, URGENT: 4 };
+
+const getAssigneeIds = (task: Task) => task.assignees?.length
+  ? task.assignees.map((assignment) => assignment.user.id)
+  : task.assignedTo ? [task.assignedTo.id] : [];
+
+const isSameCalendarDay = (first: Date, second: Date) => (
+  first.getFullYear() === second.getFullYear()
+  && first.getMonth() === second.getMonth()
+  && first.getDate() === second.getDate()
+);
 
 export default function Dashboard({ currentUser }: DashboardProps) {
   const isAdmin = currentUser.role === 'ADMIN';
@@ -38,6 +51,55 @@ export default function Dashboard({ currentUser }: DashboardProps) {
 
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [taskFilters, setTaskFilters] = useState<TaskFiltersState>(DEFAULT_TASK_FILTERS);
+
+  const filteredTasks = useMemo(() => {
+    const now = new Date();
+    const sevenDaysFromNow = new Date(now);
+    sevenDaysFromNow.setDate(now.getDate() + 7);
+    const query = taskFilters.query.trim().toLocaleLowerCase('sq-AL');
+
+    const matchingTasks = tasks.filter((task) => {
+      const assigneeIds = getAssigneeIds(task);
+      const deadline = task.deadline ? new Date(task.deadline) : null;
+      const hasValidDeadline = Boolean(deadline && !Number.isNaN(deadline.getTime()));
+      const searchableText = [
+        task.title,
+        task.description,
+        task.createdBy?.firstName,
+        task.createdBy?.lastName,
+        ...(task.assignees || []).flatMap(({ user }) => [user.firstName, user.lastName, user.email]),
+        ...(task.tags || []).map(({ tag }) => tag.name),
+      ].filter(Boolean).join(' ').toLocaleLowerCase('sq-AL');
+
+      if (query && !searchableText.includes(query)) return false;
+      if (taskFilters.status !== 'ALL' && task.status !== taskFilters.status) return false;
+      if (taskFilters.priority !== 'ALL' && task.priority !== taskFilters.priority) return false;
+      if (taskFilters.assignee === 'UNASSIGNED' && assigneeIds.length > 0) return false;
+      if (taskFilters.assignee !== 'ALL' && taskFilters.assignee !== 'UNASSIGNED' && !assigneeIds.includes(taskFilters.assignee)) return false;
+      if (taskFilters.tag !== 'ALL' && !(task.tags || []).some(({ tag }) => tag.id === taskFilters.tag)) return false;
+      if (taskFilters.relationship === 'ASSIGNED_TO_ME' && !assigneeIds.includes(currentUser.id)) return false;
+      if (taskFilters.relationship === 'CREATED_BY_ME' && task.createdBy?.id !== currentUser.id) return false;
+
+      if (taskFilters.deadline === 'NO_DEADLINE' && hasValidDeadline) return false;
+      if (taskFilters.deadline !== 'ALL' && taskFilters.deadline !== 'NO_DEADLINE' && !hasValidDeadline) return false;
+      if (deadline && hasValidDeadline) {
+        if (taskFilters.deadline === 'OVERDUE' && !(deadline < now && task.status !== 'COMPLETED')) return false;
+        if (taskFilters.deadline === 'TODAY' && !isSameCalendarDay(deadline, now)) return false;
+        if (taskFilters.deadline === 'NEXT_7_DAYS' && !(deadline >= now && deadline <= sevenDaysFromNow)) return false;
+      }
+      return true;
+    });
+
+    return matchingTasks.sort((first, second) => {
+      if (taskFilters.sort === 'DEADLINE_ASC') return new Date(first.deadline).getTime() - new Date(second.deadline).getTime();
+      if (taskFilters.sort === 'DEADLINE_DESC') return new Date(second.deadline).getTime() - new Date(first.deadline).getTime();
+      if (taskFilters.sort === 'PRIORITY_DESC') return (priorityWeight[second.priority] || 0) - (priorityWeight[first.priority] || 0);
+      if (taskFilters.sort === 'TITLE_ASC') return first.title.localeCompare(second.title, 'sq');
+      if (taskFilters.sort === 'CREATED_DESC') return new Date(second.createdAt || 0).getTime() - new Date(first.createdAt || 0).getTime();
+      return 0;
+    });
+  }, [tasks, taskFilters, currentUser.id]);
 
   // Fetching Logic
   const fetchSpaces = async () => {
@@ -46,7 +108,11 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       if (res.ok) {
         const data = await res.json();
         setSpaces(data);
-        if (data.length > 0 && !activeSpace) setActiveSpace(data[0]);
+        setActiveSpace((current) => {
+          if (data.length === 0) return null;
+          if (!current) return data[0];
+          return data.find((space: Space) => space.id === current.id) || data[0];
+        });
       }
     } catch (err) { console.error(err); }
   };
@@ -88,6 +154,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
 
   useEffect(() => {
     if (activeSpace) {
+      setTaskFilters(DEFAULT_TASK_FILTERS);
       fetchTasks(activeSpace.id);
       fetchSpaceMembers(activeSpace.id);
     }
@@ -106,7 +173,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       if (!res.ok) throw new Error(data.error);
 
       const createdSpace = { ...data, createdBy: { id: currentUser.id, firstName: currentUser.firstName, lastName: currentUser.lastName } };
-      setSpaces([...spaces, createdSpace]);
+      setSpaces((current) => [...current, createdSpace]);
       setActiveSpace(createdSpace);
       setShowCreateSpace(false);
       setSuccessMsg('Hapësira u krijua me sukses.');
@@ -128,7 +195,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       if (!res.ok) throw new Error(data.error);
 
       setShowInviteMember(false);
-      fetchSpaceMembers(activeSpace.id);
+      await Promise.all([fetchSpaceMembers(activeSpace.id), fetchSpaces()]);
       setSuccessMsg('Anëtari u shtua me sukses në hapësirë.');
     } catch (err: any) {
       setErrorMsg(err.message);
@@ -148,6 +215,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       if (!res.ok) throw new Error(data.error);
 
       setTasks((current) => [data, ...current]);
+      await fetchSpaces();
       setShowCreateTask(false);
       setSuccessMsg('Detyra u krijua me sukses.');
     } catch (err: any) {
@@ -246,7 +314,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       const res = await fetch(`/api/spaces/${activeSpace.id}/members/${userId}`, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      await fetchSpaceMembers(activeSpace.id);
+      await Promise.all([fetchSpaceMembers(activeSpace.id), fetchSpaces()]);
       setSuccessMsg('Anëtari u hoq nga hapësira.');
     } catch (err: any) {
       setErrorMsg(err.message);
@@ -273,6 +341,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Detyra nuk u fshi');
     setTasks((current) => current.filter((task) => task.id !== taskId));
+    await fetchSpaces();
     setSelectedTask(null);
     setSuccessMsg('Detyra u fshi.');
   };
@@ -291,7 +360,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
   };
 
   return (
-    <div className="dashboard-layout" style={{ display: 'flex', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
+    <div className="dashboard-layout">
       
       <SpaceSidebar 
         spaces={spaces}
@@ -302,22 +371,11 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         onShowRegisterUser={() => { setErrorMsg(''); setShowRegisterUser(true); }}
       />
 
-      <main className="main-content" style={{ flex: 1, overflowY: 'auto', padding: '24px', backgroundColor: 'hsl(var(--bg-primary))' }}>
+      <main className="main-content dashboard-main">
         {successMsg && (
-          <div style={{
-            backgroundColor: 'hsl(var(--accent-success) / 0.15)',
-            border: '1px solid hsl(var(--accent-success) / 0.3)',
-            color: 'hsl(var(--accent-success))',
-            padding: '12px 20px',
-            borderRadius: 'var(--border-radius-md)',
-            fontSize: '0.85rem',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '20px'
-          }}>
+          <div className="dashboard-alert dashboard-alert--success">
             <span>{successMsg}</span>
-            <button onClick={() => setSuccessMsg('')} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}>
+            <button onClick={() => setSuccessMsg('')} aria-label="Mbyll mesazhin">
               <X size={16} />
             </button>
           </div>
@@ -325,52 +383,61 @@ export default function Dashboard({ currentUser }: DashboardProps) {
 
         {activeSpace ? (
           <>
-            <div className="content-header" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div className="content-header workspace-hero">
               <div className="space-info">
-                <h2 style={{ marginBottom: '8px' }}>{activeSpace.name}</h2>
-                <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))' }}>
-                  Hapësirë private · Anëtarë: {spaceMembers.length} | Krijuesi: {activeSpace.createdBy?.firstName} {activeSpace.createdBy?.lastName}
+                <span className="workspace-hero__eyebrow"><ShieldCheck size={14} /> Hapësirë private</span>
+                <h1>{activeSpace.name}</h1>
+                <div className="workspace-hero__meta">
+                  <span><Users size={14} /> {spaceMembers.length} {spaceMembers.length === 1 ? 'anëtar' : 'anëtarë'}</span>
+                  <span className="workspace-hero__separator" />
+                  <span>Krijuar nga <strong>{activeSpace.createdBy?.firstName} {activeSpace.createdBy?.lastName}</strong></span>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <>
-                  {canManageActiveSpace && (
-                    <button onClick={() => { setErrorMsg(''); setShowInviteMember(true); }} className="btn btn-secondary">
-                      <UserPlus size={18} />
-                      <span>Menaxho anëtarët</span>
-                    </button>
-                  )}
-                  {isSpaceOwner && (
-                    <button onClick={handleDeleteSpace} className="btn btn-secondary" style={{ color: 'hsl(var(--accent-danger))' }}>
-                      <Trash2 size={18} />
-                      <span>Fshij Hapësirën</span>
-                    </button>
-                  )}
-                  {canCreateTask && (
-                    <button onClick={() => { setErrorMsg(''); setShowCreateTask(true); }} className="btn btn-primary">
-                      <Plus size={18} />
-                      <span>Shto Detyrë</span>
-                    </button>
-                  )}
-                </>
+              <div className="workspace-hero__actions">
+                {canManageActiveSpace && (
+                  <button onClick={() => { setErrorMsg(''); setShowInviteMember(true); }} className="btn btn-secondary">
+                    <UserPlus size={18} />
+                    <span>Menaxho anëtarët</span>
+                  </button>
+                )}
+                {isSpaceOwner && (
+                  <button onClick={handleDeleteSpace} className="btn btn-secondary btn-danger-soft">
+                    <Trash2 size={18} />
+                    <span>Fshij hapësirën</span>
+                  </button>
+                )}
+                {canCreateTask && (
+                  <button onClick={() => { setErrorMsg(''); setShowCreateTask(true); }} className="btn btn-primary">
+                    <Plus size={18} />
+                    <span>Shto detyrë</span>
+                  </button>
+                )}
               </div>
             </div>
 
             <StatsPanel tasks={tasks} membersCount={spaceMembers.length} />
 
-            <TaskBoard tasks={tasks} onTaskClick={setSelectedTask} />
+            <TaskFilters
+              tasks={tasks}
+              members={spaceMembers}
+              filters={taskFilters}
+              resultCount={filteredTasks.length}
+              onChange={setTaskFilters}
+            />
+
+            <TaskBoard tasks={filteredTasks} statusFilter={taskFilters.status} onTaskClick={setSelectedTask} />
           </>
         ) : (
-          <div className="empty-state" style={{ margin: 'auto', maxWidth: '400px', textAlign: 'center', marginTop: '100px' }}>
-            <Unlock size={48} style={{ color: 'hsl(var(--text-muted))', marginBottom: '16px' }} />
+          <div className="empty-state dashboard-empty">
+            <span className="dashboard-empty__icon"><LockKeyhole size={30} /></span>
             <h3 style={{ marginBottom: '8px' }}>Mirëseerdhët në Virtuo</h3>
             <p style={{ color: 'hsl(var(--text-secondary))' }}>
-              Për të filluar punën, ju lutem krijoni një hapësirë të re ose zgjidhni një ekzistuese në sidebar.
+              Krijo një hapësirë të re ose zgjidh një ekzistuese nga lista për të filluar punën.
             </p>
             <button onClick={() => { setErrorMsg(''); setShowCreateSpace(true); }} className="btn btn-primary" style={{ marginTop: '16px' }}>
               <Plus size={18} />
-              <span>Krijo Hapësirën e parë</span>
+              <span>Krijo hapësirën e parë</span>
             </button>
           </div>
         )}

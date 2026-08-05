@@ -35,6 +35,8 @@ export default function Navbar({ user, onLogout, notifications, onMarkAsRead, on
               className="btn btn-secondary btn-sm" 
               style={{ padding: '6px', borderRadius: '50%', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               onClick={() => setShowNotifications(!showNotifications)}
+              aria-label={unreadCount > 0 ? `Njoftimet, ${unreadCount} të palexuara` : 'Njoftimet'}
+              aria-expanded={showNotifications}
             >
               <Bell size={18} />
               {unreadCount > 0 && (
@@ -71,7 +73,7 @@ export default function Navbar({ user, onLogout, notifications, onMarkAsRead, on
             </span>
           </div>
 
-          <button onClick={onLogout} className="btn btn-secondary btn-sm" title="Dil" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <button onClick={onLogout} className="btn btn-secondary btn-sm nav-logout" title="Dil" aria-label="Dil nga llogaria" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <LogOut size={16} />
             <span>Dil</span>
           </button>

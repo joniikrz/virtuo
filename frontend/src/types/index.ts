@@ -9,6 +9,7 @@ export interface User {
 export interface Space {
   id: string;
   name: string;
+  color?: string;
   isPrivate: boolean;
   createdBy: {
     id?: string;
@@ -49,6 +50,7 @@ export interface Task {
   status: string;
   priority: string; // LOW, NORMAL, HIGH, URGENT
   deadline: string;
+  createdAt?: string;
   assignedTo: { id: string; email: string; firstName: string; lastName: string; } | null;
   assignedToId?: string | null;
   assignees: { id: string; user: { id: string; email: string; firstName: string; lastName: string; } }[];

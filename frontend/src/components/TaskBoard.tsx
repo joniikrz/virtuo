@@ -1,65 +1,48 @@
 import React from 'react';
-import { Clock, Play, CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, Clock, Inbox, Play } from 'lucide-react';
 import { Task } from '../types';
 import TaskCard from './TaskCard';
 
 interface TaskBoardProps {
   tasks: Task[];
   onTaskClick: (task: Task) => void;
+  statusFilter?: string;
 }
 
-export default function TaskBoard({ tasks, onTaskClick }: TaskBoardProps) {
-  const getTasksByStatus = (status: string) => tasks.filter(t => t.status === status);
+const columns = [
+  { status: 'TODO', label: "Për t'u bërë", icon: Clock, className: 'task-column--todo' },
+  { status: 'IN_PROGRESS', label: 'Në proces', icon: Play, className: 'task-column--progress' },
+  { status: 'COMPLETED', label: 'Të përfunduara', icon: CheckCircle2, className: 'task-column--completed' },
+];
+
+export default function TaskBoard({ tasks, onTaskClick, statusFilter = 'ALL' }: TaskBoardProps) {
+  const visibleColumns = statusFilter === 'ALL'
+    ? columns
+    : columns.filter((column) => column.status === statusFilter);
 
   return (
-    <div className="tasks-layout">
-      {/* TODO */}
-      <div className="task-column task-column--todo">
-        <div className="column-header">
-          <span className="column-title">
-            <Clock size={16} />
-            <span>Për t'u bërë</span>
-          </span>
-          <span className="column-count">{getTasksByStatus('TODO').length}</span>
-        </div>
-        <div className="task-card-list">
-          {getTasksByStatus('TODO').map(t => (
-            <TaskCard key={t.id} task={t} onClick={onTaskClick} />
-          ))}
-        </div>
-      </div>
-
-      {/* IN_PROGRESS */}
-      <div className="task-column task-column--progress">
-        <div className="column-header">
-          <span className="column-title">
-            <Play size={16} />
-            <span>Në proces</span>
-          </span>
-          <span className="column-count">{getTasksByStatus('IN_PROGRESS').length}</span>
-        </div>
-        <div className="task-card-list">
-          {getTasksByStatus('IN_PROGRESS').map(t => (
-            <TaskCard key={t.id} task={t} onClick={onTaskClick} />
-          ))}
-        </div>
-      </div>
-
-      {/* COMPLETED */}
-      <div className="task-column task-column--completed">
-        <div className="column-header">
-          <span className="column-title">
-            <CheckCircle2 size={16} />
-            <span>E përfunduar</span>
-          </span>
-          <span className="column-count">{getTasksByStatus('COMPLETED').length}</span>
-        </div>
-        <div className="task-card-list">
-          {getTasksByStatus('COMPLETED').map(t => (
-            <TaskCard key={t.id} task={t} onClick={onTaskClick} />
-          ))}
-        </div>
-      </div>
+    <div className={`tasks-layout ${visibleColumns.length === 1 ? 'tasks-layout--single' : ''}`}>
+      {visibleColumns.map((column) => {
+        const columnTasks = tasks.filter((task) => task.status === column.status);
+        const Icon = column.icon;
+        return (
+          <section className={`task-column ${column.className}`} key={column.status}>
+            <div className="column-header">
+              <span className="column-title"><Icon size={16} /><span>{column.label}</span></span>
+              <span className="column-count">{columnTasks.length}</span>
+            </div>
+            <div className="task-card-list">
+              {columnTasks.map((task) => <TaskCard key={task.id} task={task} onClick={onTaskClick} />)}
+              {columnTasks.length === 0 && (
+                <div className="task-column__empty">
+                  <Inbox size={20} />
+                  <span>Nuk u gjet asnjë detyrë</span>
+                </div>
+              )}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }

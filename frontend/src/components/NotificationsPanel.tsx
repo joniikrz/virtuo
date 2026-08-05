@@ -1,5 +1,5 @@
-import React from 'react';
-import { Bell, Check, X } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { Bell, CheckCheck, Inbox, X } from 'lucide-react';
 import { Notification } from '../types';
 
 interface NotificationsPanelProps {
@@ -11,67 +11,75 @@ interface NotificationsPanelProps {
 }
 
 export default function NotificationsPanel({ notifications, onMarkAsRead, onMarkAllAsRead, isOpen, onClose }: NotificationsPanelProps) {
+  const unreadCount = notifications.filter((notification) => !notification.isRead).length;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
-
   return (
-    <div className="notifications-dropdown" style={{
-      position: 'relative',
-      backgroundColor: 'hsl(var(--bg-primary))',
-      border: '1px solid hsl(var(--border))',
-      borderRadius: 'var(--border-radius-md)',
-      boxShadow: 'var(--shadow-lg)',
-      zIndex: 10,
-      overflow: 'hidden'
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid hsl(var(--border))' }}>
-        <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Bell size={16} /> Njoftimet
-        </h4>
-        {unreadCount > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <button onClick={onMarkAllAsRead} className="btn btn-secondary btn-sm" style={{ padding: '4px 8px', fontSize: '0.75rem' }}>
-              <Check size={12} /> Shënoji si të lexuara
-            </button>
-            <button type="button" className="modal-close-btn" onClick={onClose} aria-label="Mbyll njoftimet"><X size={16} /></button>
-          </div>
-        )}
-        {unreadCount === 0 && <button type="button" className="modal-close-btn" onClick={onClose} aria-label="Mbyll njoftimet"><X size={16} /></button>}
-      </div>
+    <div className="notification-drawer-layer" role="presentation">
+      <button className="notification-drawer-backdrop" type="button" onClick={onClose} aria-label="Mbyll njoftimet" />
 
-      <div style={{ maxHeight: '350px', overflowY: 'auto' }}>
-        {notifications.length === 0 ? (
-          <div style={{ padding: '20px', textAlign: 'center', color: 'hsl(var(--text-muted))', fontSize: '0.85rem' }}>
-            Nuk ka njoftime.
-          </div>
-        ) : (
-          notifications.map(n => (
-            <div 
-              key={n.id} 
-              style={{
-                padding: '12px 16px',
-                borderBottom: '1px solid hsl(var(--border))',
-                backgroundColor: n.isRead ? 'transparent' : 'hsl(var(--primary) / 0.05)',
-                cursor: 'pointer'
-              }}
-              onClick={() => {
-                if (!n.isRead) onMarkAsRead(n.id);
-              }}
-            >
-              <div style={{ fontWeight: n.isRead ? 400 : 600, fontSize: '0.9rem', marginBottom: '4px' }}>
-                {n.title}
-              </div>
-              <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>
-                {n.message}
-              </div>
-              <div style={{ fontSize: '0.7rem', color: 'hsl(var(--text-muted))', marginTop: '6px' }}>
-                {new Date(n.createdAt).toLocaleString('sq-AL', { dateStyle: 'short', timeStyle: 'short' })}
-              </div>
+      <aside className="notification-drawer" role="dialog" aria-modal="true" aria-label="Njoftimet">
+        <header className="notification-drawer__header">
+          <div className="notification-drawer__title">
+            <span className="notification-drawer__title-icon"><Bell size={19} /></span>
+            <div>
+              <h3>Njoftimet</h3>
+              <p>{unreadCount > 0 ? `${unreadCount} të palexuara` : 'Të gjitha janë lexuar'}</p>
             </div>
-          ))
+          </div>
+          <button type="button" className="notification-drawer__close" onClick={onClose} aria-label="Mbyll njoftimet">
+            <X size={20} />
+          </button>
+        </header>
+
+        {unreadCount > 0 && (
+          <div className="notification-drawer__actions">
+            <button onClick={onMarkAllAsRead} className="btn btn-secondary btn-sm">
+              <CheckCheck size={15} /> Shënoji të gjitha si të lexuara
+            </button>
+          </div>
         )}
-      </div>
+
+        <div className="notification-drawer__list">
+          {notifications.length === 0 ? (
+            <div className="notification-drawer__empty">
+              <span><Inbox size={26} /></span>
+              <strong>Nuk ka njoftime</strong>
+              <p>Kur të ketë aktivitet të ri në detyrat e tua, do të shfaqet këtu.</p>
+            </div>
+          ) : (
+            notifications.map((notification) => (
+              <button
+                type="button"
+                key={notification.id}
+                className={`notification-drawer__item ${notification.isRead ? '' : 'unread'}`}
+                onClick={() => {
+                  if (!notification.isRead) onMarkAsRead(notification.id);
+                }}
+              >
+                <span className="notification-drawer__status" aria-hidden="true" />
+                <div className="notification-drawer__content">
+                  <strong>{notification.title}</strong>
+                  <p>{notification.message}</p>
+                  <time dateTime={notification.createdAt}>
+                    {new Date(notification.createdAt).toLocaleString('sq-AL', { dateStyle: 'medium', timeStyle: 'short' })}
+                  </time>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </aside>
     </div>
   );
 }

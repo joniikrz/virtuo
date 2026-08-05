@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Lock, Unlock, UserPlus } from 'lucide-react';
+import { Check, FolderKanban, ListTodo, LockKeyhole, Plus, UserPlus, Users } from 'lucide-react';
 import { Space } from '../types';
 
 interface SpaceSidebarProps {
@@ -20,46 +20,66 @@ export default function SpaceSidebar({
   onShowRegisterUser
 }: SpaceSidebarProps) {
   return (
-    <aside className="sidebar">
-      <div className="sidebar-header">
-        <span className="sidebar-title">Hapësirat e Punës</span>
+    <aside className="sidebar workspace-sidebar">
+      <div className="workspace-sidebar__heading">
+        <div>
+          <span className="sidebar-title">Hapësirat e punës</span>
+          <p>{spaces.length} {spaces.length === 1 ? 'hapësirë private' : 'hapësira private'}</p>
+        </div>
         <button
           onClick={onShowCreateSpace}
-          className="btn btn-primary btn-sm"
-          style={{ padding: '5px 9px', borderRadius: '50%' }}
-          title="Krijo Hapësirë të re"
+          className="workspace-add-button"
+          title="Krijo hapësirë të re"
+          aria-label="Krijo hapësirë të re"
         >
-          <Plus size={16} />
+          <Plus size={18} />
         </button>
       </div>
 
       <div className="space-list">
-        {spaces.map(s => (
-          <div 
-            key={s.id} 
-            className={`space-item ${activeSpace?.id === s.id ? 'active' : ''}`}
-            onClick={() => onSelectSpace(s)}
-          >
-            <span className="space-item-name">
-              <Lock size={14} style={{ color: 'hsl(var(--accent-warning))' }} />
-              {s.name}
-            </span>
-            <span className="space-item-badge">Hapësirë private</span>
-          </div>
-        ))}
+        {spaces.map((space) => {
+          const isActive = activeSpace?.id === space.id;
+          const color = space.color || '#7048e8';
+          return (
+            <button
+              type="button"
+              key={space.id}
+              className={`space-card ${isActive ? 'active' : ''}`}
+              onClick={() => onSelectSpace(space)}
+              aria-pressed={isActive}
+              style={{ '--space-accent': color } as React.CSSProperties}
+            >
+              <span className="space-card__icon"><FolderKanban size={19} /></span>
+              <span className="space-card__body">
+                <span className="space-card__name">{space.name}</span>
+                <span className="space-card__meta">
+                  <span><Users size={12} /> {space._count?.members ?? 0}</span>
+                  <span><ListTodo size={12} /> {space._count?.tasks ?? 0}</span>
+                  <span><LockKeyhole size={11} /> Private</span>
+                </span>
+              </span>
+              {isActive && <span className="space-card__selected"><Check size={13} /></span>}
+            </button>
+          );
+        })}
+
         {spaces.length === 0 && (
-          <div className="empty-state">
-            <Unlock size={24} />
-            <span>Nuk ka asnjë hapësirë</span>
+          <div className="workspace-empty">
+            <span><FolderKanban size={25} /></span>
+            <strong>Nuk ka hapësira</strong>
+            <p>Krijo hapësirën e parë dhe organizo detyrat me ekipin.</p>
+            <button type="button" onClick={onShowCreateSpace} className="btn btn-primary btn-sm">
+              <Plus size={15} /> Krijo hapësirë
+            </button>
           </div>
         )}
       </div>
 
       {isAdmin && (
-        <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div className="workspace-sidebar__footer">
           <button onClick={onShowRegisterUser} className="btn btn-secondary btn-sm">
             <UserPlus size={16} />
-            <span>Regjistro Punonjës</span>
+            <span>Regjistro punonjës</span>
           </button>
         </div>
       )}
