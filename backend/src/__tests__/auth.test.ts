@@ -143,6 +143,47 @@ describe('Auth Endpoints API Tests', () => {
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
+  it('PUT /api/auth/users/:id/password - Admin-i ndryshon fjalëkalimin dhe anulon sesionet e vjetra', async () => {
+    vi.mocked(prisma.user.findUnique)
+      .mockResolvedValueOnce({
+        id: 'admin-1', email: 'admin@virtuo.local', firstName: 'Admin', lastName: 'User',
+        sessionVersion: 0, role: { name: 'ADMIN' }, emailNotifications: true, inAppNotifications: true,
+      } as never)
+      .mockResolvedValueOnce({
+        id: 'user-2', email: 'user2@virtuo.local', firstName: 'User', lastName: 'Two',
+      } as never);
+    vi.mocked(prisma.user.update).mockResolvedValue({ id: 'user-2' } as never);
+    const token = signSessionToken('admin-1', 0);
+
+    const res = await request(app)
+      .put('/api/auth/users/user-2/password')
+      .set('Cookie', [`token=${token}`])
+      .send({ newPassword: 'PasswordiIRi-2026!' });
+
+    expect(res.status).toBe(200);
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-2' },
+      data: { passwordHash: expect.any(String), sessionVersion: { increment: 1 } },
+    });
+    expect(res.body.message).toContain('Sesionet e vjetra u çaktivizuan');
+  });
+
+  it('PUT /api/auth/users/:id/password - Përdoruesi i zakonshëm nuk ka qasje', async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: 'user-1', email: 'user@virtuo.local', firstName: 'User', lastName: 'One',
+      sessionVersion: 0, role: { name: 'USER' }, emailNotifications: true, inAppNotifications: true,
+    } as never);
+    const token = signSessionToken('user-1', 0);
+
+    const res = await request(app)
+      .put('/api/auth/users/user-2/password')
+      .set('Cookie', [`token=${token}`])
+      .send({ newPassword: 'PasswordiIRi-2026!' });
+
+    expect(res.status).toBe(403);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
   it('POST /api/auth/forgot-password/verify - Verifikon kodin dhe kthen token të përkohshëm', async () => {
     const recoveryCodeHash = await bcrypt.hash('KodiIm123!', 10);
     vi.mocked(prisma.user.findUnique).mockResolvedValue({

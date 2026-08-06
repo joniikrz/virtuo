@@ -1330,6 +1330,7 @@ body { background-color: hsl(var(--bg-deep)); }
 .icon-button { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid hsl(var(--border-muted)); border-radius: 10px; color: hsl(var(--text-secondary)); background: hsl(var(--bg-secondary)); cursor: pointer; }
 .icon-button:hover { color: hsl(var(--text-primary)); border-color: hsl(var(--border-light)); }
 .settings-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; padding: 10px 12px; border-bottom: 1px solid hsl(var(--border-muted)); background: hsl(var(--bg-secondary) / .65); }
+.settings-tabs.admin-tabs { grid-template-columns: repeat(5, minmax(88px, 1fr)); overflow-x: auto; }
 .settings-tabs button { min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 7px; border: 1px solid transparent; border-radius: 9px; color: hsl(var(--text-secondary)); background: transparent; font: inherit; font-size: .73rem; font-weight: 700; cursor: pointer; transition: var(--transition-fast); }
 .settings-tabs button:hover { color: hsl(var(--text-primary)); background: hsl(var(--bg-card)); }
 .settings-tabs button.active { color: hsl(var(--primary)); border-color: hsl(var(--primary) / .18); background: hsl(var(--primary) / .09); }

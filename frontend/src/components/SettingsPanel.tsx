@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { BellRing, History, KeyRound, Lock, Save, UserRound, X } from 'lucide-react';
+import { BellRing, History, KeyRound, Lock, Save, UserRound, UsersRound, X } from 'lucide-react';
 import { User } from '../types';
 import { apiErrorMessage, readApiJson } from '../lib/api';
 
-type SettingsTab = 'account' | 'security' | 'activity' | 'notifications';
+type SettingsTab = 'account' | 'security' | 'activity' | 'notifications' | 'users';
 
 interface ActivityItem {
   id: string;
@@ -25,6 +25,7 @@ const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'security', label: 'Siguria', icon: <Lock size={17} /> },
   { id: 'activity', label: 'Aktiviteti', icon: <History size={17} /> },
   { id: 'notifications', label: 'Njoftimet', icon: <BellRing size={17} /> },
+  { id: 'users', label: 'Përdoruesit', icon: <UsersRound size={17} /> },
 ];
 
 async function apiRequest<T>(url: string, method: string, body?: unknown): Promise<T> {
@@ -53,6 +54,11 @@ export default function SettingsPanel({ user, isOpen, initialTab = 'account', on
   const [emailNotifications, setEmailNotifications] = useState(user.emailNotifications ?? true);
   const [inAppNotifications, setInAppNotifications] = useState(user.inAppNotifications ?? true);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [adminUsers, setAdminUsers] = useState<User[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminConfirmPassword, setAdminConfirmPassword] = useState('');
+  const [loadingUsers, setLoadingUsers] = useState(false);
   const [loadingActivity, setLoadingActivity] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -71,6 +77,9 @@ export default function SettingsPanel({ user, isOpen, initialTab = 'account', on
     setConfirmPassword('');
     setRecoveryPassword('');
     setRecoveryCode('');
+    setSelectedUserId('');
+    setAdminPassword('');
+    setAdminConfirmPassword('');
     setMessage(null);
   }, [isOpen, initialTab, user]);
 
@@ -89,6 +98,15 @@ export default function SettingsPanel({ user, isOpen, initialTab = 'account', on
       .catch((error: Error) => setMessage({ type: 'error', text: error.message }))
       .finally(() => setLoadingActivity(false));
   }, [isOpen, tab]);
+
+  useEffect(() => {
+    if (!isOpen || tab !== 'users' || user.role !== 'ADMIN') return;
+    setLoadingUsers(true);
+    apiRequest<User[]>('/api/auth/users', 'GET')
+      .then((users) => setAdminUsers(users))
+      .catch((error: Error) => setMessage({ type: 'error', text: error.message }))
+      .finally(() => setLoadingUsers(false));
+  }, [isOpen, tab, user.role]);
 
   if (!isOpen) return null;
 
@@ -149,6 +167,26 @@ export default function SettingsPanel({ user, isOpen, initialTab = 'account', on
     });
   };
 
+  const saveUserPassword = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedUserId) {
+      setMessage({ type: 'error', text: 'Zgjidh përdoruesin.' });
+      return;
+    }
+    if (adminPassword !== adminConfirmPassword) {
+      setMessage({ type: 'error', text: 'Fjalëkalimet e reja nuk përputhen.' });
+      return;
+    }
+    void runSave(async () => {
+      const data = await apiRequest<{ message?: string }>(`/api/auth/users/${encodeURIComponent(selectedUserId)}/password`, 'PUT', { newPassword: adminPassword });
+      setAdminPassword('');
+      setAdminConfirmPassword('');
+      setMessage({ type: 'success', text: data.message || 'Fjalëkalimi u ndryshua.' });
+    });
+  };
+
+  const visibleTabs = tabs.filter((item) => item.id !== 'users' || user.role === 'ADMIN');
+
   return (
     <div className="settings-overlay" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <aside className="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
@@ -157,8 +195,8 @@ export default function SettingsPanel({ user, isOpen, initialTab = 'account', on
           <button type="button" className="icon-button" onClick={onClose} aria-label="Mbyll cilësimet"><X size={20} /></button>
         </header>
 
-        <nav className="settings-tabs" aria-label="Seksionet e cilësimeve">
-          {tabs.map((item) => (
+        <nav className={`settings-tabs ${user.role === 'ADMIN' ? 'admin-tabs' : ''}`} aria-label="Seksionet e cilësimeve">
+          {visibleTabs.map((item) => (
             <button key={item.id} type="button" className={tab === item.id ? 'active' : ''} onClick={() => { setTab(item.id); setMessage(null); }}>
               {item.icon}<span>{item.label}</span>
             </button>
@@ -216,6 +254,33 @@ export default function SettingsPanel({ user, isOpen, initialTab = 'account', on
               <label className="preference-row"><div><strong>Njoftimet në aplikacion</strong><span>Shfaq njoftimet te ikona e ziles.</span></div><input type="checkbox" checked={inAppNotifications} onChange={(e) => setInAppNotifications(e.target.checked)} /></label>
               <label className="preference-row"><div><strong>Njoftimet me email</strong><span>Dërgo email kur caktohesh në një detyrë.</span></div><input type="checkbox" checked={emailNotifications} onChange={(e) => setEmailNotifications(e.target.checked)} /></label>
               <button className="btn btn-primary settings-save" disabled={saving}><Save size={17} /> Ruaj preferencat</button>
+            </form>
+          )}
+
+          {tab === 'users' && user.role === 'ADMIN' && (
+            <form className="settings-form" onSubmit={saveUserPassword}>
+              <div className="settings-section-heading">
+                <h3>Menaxhimi i përdoruesve</h3>
+                <p>Vendos një fjalëkalim të ri. Përdoruesi do të dalë automatikisht nga sesionet ekzistuese.</p>
+              </div>
+              {loadingUsers ? <p className="settings-empty">Duke i ngarkuar përdoruesit...</p> : (
+                <label>
+                  Përdoruesi
+                  <select className="input-field" value={selectedUserId} onChange={(event) => { setSelectedUserId(event.target.value); setMessage(null); }} required>
+                    <option value="">Zgjidh përdoruesin</option>
+                    {adminUsers.filter((account) => account.id !== user.id).map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.firstName} {account.lastName} — {account.email} ({account.role})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <label>Fjalëkalimi i ri<input type="password" className="input-field" value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} minLength={12} maxLength={128} autoComplete="new-password" required /></label>
+              <label>Përsërit fjalëkalimin<input type="password" className="input-field" value={adminConfirmPassword} onChange={(event) => setAdminConfirmPassword(event.target.value)} minLength={12} maxLength={128} autoComplete="new-password" required /></label>
+              <button className="btn btn-primary settings-save" disabled={saving || loadingUsers || !selectedUserId}>
+                <KeyRound size={17} /> {saving ? 'Duke u ndryshuar...' : 'Ndrysho fjalëkalimin'}
+              </button>
             </form>
           )}
         </div>

@@ -107,7 +107,7 @@ router.get('/me', authenticateToken, (req: AuthRequest, res: Response): void => 
  * GET /api/auth/users
  * Lista e të gjithë përdoruesve
  */
-router.get('/users', authenticateToken, async (_req: AuthRequest, res: Response): Promise<void> => {
+router.get('/users', authenticateToken, requireAdmin, async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
     const users = await prisma.user.findMany({
       select: {
@@ -442,6 +442,64 @@ router.put('/change-password', authenticateToken, async (req: AuthRequest, res: 
     res.json({ message: 'Fjalëkalimi u ndryshua me sukses' });
   } catch (error) {
     console.error('Change password error:', error);
+    res.status(500).json({ error: 'Ndodhi një gabim gjatë ndryshimit të fjalëkalimit' });
+  }
+});
+
+/**
+ * PUT /api/auth/users/:id/password
+ * Admin-i vendos një fjalëkalim të ri për një përdorues dhe anulon sesionet e tij të vjetra.
+ */
+router.put('/users/:id/password', authenticateToken, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
+  const adminId = req.user?.id;
+  const targetUserId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
+  const { newPassword } = req.body;
+
+  if (!adminId) {
+    res.status(401).json({ error: 'I paautorizuar' });
+    return;
+  }
+  if (!targetUserId || typeof newPassword !== 'string') {
+    res.status(400).json({ error: 'Përdoruesi dhe fjalëkalimi i ri janë të detyrueshëm' });
+    return;
+  }
+  if (targetUserId === adminId) {
+    res.status(400).json({ error: 'Për llogarinë tënde përdor seksionin Siguria' });
+    return;
+  }
+
+  const invalidPassword = passwordError(newPassword);
+  if (invalidPassword) {
+    res.status(400).json({ error: invalidPassword });
+    return;
+  }
+
+  try {
+    const targetUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true, email: true, firstName: true, lastName: true },
+    });
+    if (!targetUser) {
+      res.status(404).json({ error: 'Përdoruesi nuk u gjet' });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    await prisma.user.update({
+      where: { id: targetUser.id },
+      data: { passwordHash, sessionVersion: { increment: 1 } },
+    });
+
+    await Promise.all([
+      logActivity(adminId, 'ADMIN_PASSWORD_RESET', `Ndryshoi fjalëkalimin e ${targetUser.email}`),
+      logActivity(targetUser.id, 'PASSWORD_RESET_BY_ADMIN', 'Fjalëkalimi u ndryshua nga administratori'),
+    ]);
+
+    res.json({
+      message: `Fjalëkalimi i ${targetUser.firstName} ${targetUser.lastName} u ndryshua. Sesionet e vjetra u çaktivizuan.`,
+    });
+  } catch (error) {
+    console.error('Admin password reset error:', error);
     res.status(500).json({ error: 'Ndodhi një gabim gjatë ndryshimit të fjalëkalimit' });
   }
 });
