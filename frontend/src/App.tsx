@@ -157,23 +157,11 @@ export default function App() {
   // Ekrani gjatë ngarkimit (Loading Screen)
   if (loading) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: '100vh',
-          fontFamily: "'Outfit', sans-serif",
-          background: '#0079bf',
-          color: '#fff',
-        }}
-      >
-        <div style={{ textAlign: 'center' }}>
-          <div className="trello-logo-mark" style={{ margin: '0 auto 16px' }}>
-            V
-          </div>
-          <h2 style={{ marginBottom: '8px' }}>Duke u ngarkuar...</h2>
-          <p style={{ opacity: 0.85 }}>Virtuo Task Manager</p>
+      <div className="app-loading" role="status" aria-live="polite" aria-label="Duke u ngarkuar Virtuo">
+        <div className="app-loading__content">
+          <img className="app-loading__logo" src="/assets/virtuo-logo.png" alt="Virtuo" />
+          <span className="app-loading__spinner" aria-hidden="true" />
+          <p>Duke përgatitur hapësirën tënde...</p>
         </div>
       </div>
     );
