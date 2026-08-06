@@ -11,6 +11,7 @@ vi.mock('../prisma', () => ({
       findMany: vi.fn(),
       count: vi.fn(),
       updateMany: vi.fn(),
+      deleteMany: vi.fn(),
     },
   },
 }));
@@ -80,6 +81,19 @@ describe('Notifications API caching and updates', () => {
     expect(prisma.notification.updateMany).toHaveBeenCalledWith({
       where: { id: 'notification-3', userId: 'user-1', isRead: false },
       data: { isRead: true },
+    });
+  });
+
+  it('fshin vetëm njoftimin e përdoruesit aktual', async () => {
+    vi.mocked(prisma.notification.deleteMany).mockResolvedValue({ count: 1 });
+
+    const response = await request(app)
+      .delete('/api/notifications/notification-3')
+      .set('Cookie', [`token=${token}`]);
+
+    expect(response.status).toBe(200);
+    expect(prisma.notification.deleteMany).toHaveBeenCalledWith({
+      where: { id: 'notification-3', userId: 'user-1' },
     });
   });
 });

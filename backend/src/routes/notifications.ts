@@ -105,4 +105,30 @@ router.patch('/read-all', authenticateToken, async (req: AuthRequest, res: Respo
   }
 });
 
+/**
+ * DELETE /api/notifications/:id
+ * Heq një njoftim të vjetër vetëm për përdoruesin aktual.
+ */
+router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  if (!userId) {
+    res.status(401).json({ error: 'I paautorizuar' });
+    return;
+  }
+
+  try {
+    const deleted = await prisma.notification.deleteMany({
+      where: { id: req.params.id, userId },
+    });
+    if (deleted.count === 0) {
+      res.status(404).json({ error: 'Njoftimi nuk u gjet' });
+      return;
+    }
+    res.json({ message: 'Njoftimi u hoq' });
+  } catch (error) {
+    console.error('Delete notification error:', error);
+    res.status(500).json({ error: 'Njoftimi nuk mund të hiqej' });
+  }
+});
+
 export default router;

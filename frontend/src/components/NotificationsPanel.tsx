@@ -6,7 +6,7 @@ interface NotificationsPanelProps {
   notifications: Notification[];
   onMarkAsRead: (id: string) => void;
   onMarkAllAsRead: () => void;
-  onOpenTask: (taskId: string) => void;
+  onOpenTask: (taskId: string, notificationId: string) => void;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -66,7 +66,7 @@ export default function NotificationsPanel({ notifications, onMarkAsRead, onMark
                 className={`notification-drawer__item ${notification.isRead ? '' : 'unread'}`}
                 onClick={() => {
                   if (!notification.isRead) onMarkAsRead(notification.id);
-                  if (notification.taskId) onOpenTask(notification.taskId);
+                  if (notification.taskId) onOpenTask(notification.taskId, notification.id);
                 }}
                 title={notification.taskId ? 'Hap detyrën' : 'Shëno si të lexuar'}
               >

@@ -12,7 +12,7 @@ interface NavbarProps {
   notifications: Notification[];
   onMarkAsRead: (id: string) => void;
   onMarkAllAsRead: () => void;
-  onOpenTask: (taskId: string) => void;
+  onOpenTask: (taskId: string, notificationId: string) => void;
 }
 
 export default function Navbar({ user, onLogout, onUserUpdate, notifications, onMarkAsRead, onMarkAllAsRead, onOpenTask }: NavbarProps) {
@@ -100,10 +100,10 @@ export default function Navbar({ user, onLogout, onUserUpdate, notifications, on
         onClose={() => setShowNotifications(false)}
         onMarkAsRead={onMarkAsRead}
         onMarkAllAsRead={onMarkAllAsRead}
-        onOpenTask={(taskId) => {
-          setShowNotifications(false);
-          onOpenTask(taskId);
-        }}
+          onOpenTask={(taskId, notificationId) => {
+            setShowNotifications(false);
+            onOpenTask(taskId, notificationId);
+          }}
       />
       
       <SettingsPanel user={user} isOpen={showSettings} onClose={() => setShowSettings(false)} onUserUpdate={onUserUpdate} />

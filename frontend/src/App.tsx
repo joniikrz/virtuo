@@ -27,6 +27,7 @@ export interface NotificationItem {
 
 export interface TaskNavigationRequest {
   taskId: string;
+  notificationId: string;
   requestId: number;
 }
 
@@ -149,10 +150,23 @@ export default function App() {
     }
   };
 
-  const handleOpenTask = (taskId: string) => {
+  const handleOpenTask = (taskId: string, notificationId: string) => {
     taskNavigationSequenceRef.current += 1;
-    setTaskNavigationRequest({ taskId, requestId: taskNavigationSequenceRef.current });
+    setTaskNavigationRequest({ taskId, notificationId, requestId: taskNavigationSequenceRef.current });
   };
+
+  const handleUnavailableNotification = useCallback(async (notificationId: string) => {
+    setNotifications((current) => current.filter((notification) => notification.id !== notificationId));
+    notificationsEtagRef.current = '';
+    try {
+      await fetch(`/api/notifications/${notificationId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+    } catch (error) {
+      console.error('Njoftimi i vjetër nuk mund të pastrohej:', error);
+    }
+  }, []);
 
   // Ekrani gjatë ngarkimit (Loading Screen)
   if (loading) {
@@ -184,6 +198,7 @@ export default function App() {
             currentUser={user}
             taskNavigationRequest={taskNavigationRequest}
             onTaskNavigationHandled={() => setTaskNavigationRequest(null)}
+            onTaskNavigationUnavailable={handleUnavailableNotification}
           />
         </>
       ) : (

@@ -17,6 +17,7 @@ interface DashboardProps {
   currentUser: User;
   taskNavigationRequest: TaskNavigationRequest | null;
   onTaskNavigationHandled: () => void;
+  onTaskNavigationUnavailable: (notificationId: string) => void;
 }
 
 const priorityWeight: Record<string, number> = { LOW: 1, NORMAL: 2, HIGH: 3, URGENT: 4 };
@@ -39,7 +40,7 @@ const taskDataRevision = (spaceId: string, tasks: Task[]) => `${spaceId}|${tasks
   task._count?.attachments || 0,
 ].join(':')).join('|')}`;
 
-export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNavigationHandled }: DashboardProps) {
+export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNavigationHandled, onTaskNavigationUnavailable }: DashboardProps) {
   const isAdmin = currentUser.role === 'ADMIN';
 
   const [spaces, setSpaces] = useState<Space[]>([]);
@@ -189,9 +190,17 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
 
     const openNotificationTask = async () => {
       setErrorMsg('');
+      // Mos e lër detyrën e hapur më parë të duket sikur i përket njoftimit të ri.
+      setSelectedTask(null);
+      setShowEditTask(false);
       try {
-        const detailedTask = await fetchTaskDetail(taskNavigationRequest.taskId);
-        if (!detailedTask) throw new Error('Detyra nuk u gjet ose nuk ke më qasje në të.');
+        const taskResponse = await fetch(`/api/tasks/${taskNavigationRequest.taskId}`, { cache: 'no-store' });
+        if (taskResponse.status === 404) {
+          onTaskNavigationUnavailable(taskNavigationRequest.notificationId);
+          throw new Error('Kjo detyrë është fshirë. Njoftimi i vjetër u hoq automatikisht.');
+        }
+        if (!taskResponse.ok) throw new Error('Detyra nuk mund të ngarkohet tani. Provo përsëri.');
+        const detailedTask = await taskResponse.json() as Task;
 
         let availableSpaces = spaces;
         let targetSpace = availableSpaces.find((space) => space.id === detailedTask.spaceId);
@@ -657,6 +666,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
 
       {selectedTask && (
         <TaskDetailModal
+          key={selectedTask.id}
           task={selectedTask}
           canEdit={selectedTask.createdBy?.id === currentUser.id}
           onClose={() => setSelectedTask(null)}
