@@ -74,5 +74,8 @@ export interface Notification {
   message: string;
   isRead: boolean;
   taskId: string | null;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  spaceInviteId?: string | null;
   createdAt: string;
 }

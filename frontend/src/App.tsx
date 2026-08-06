@@ -22,6 +22,9 @@ export interface NotificationItem {
   message: string;
   isRead: boolean;
   taskId: string | null;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  spaceInviteId?: string | null;
   createdAt: string;
 }
 
@@ -155,6 +158,19 @@ export default function App() {
     setTaskNavigationRequest({ taskId, notificationId, requestId: taskNavigationSequenceRef.current });
   };
 
+  const handleSpaceInviteResponse = async (inviteId: string, action: 'accept' | 'reject', notificationId: string): Promise<string> => {
+    const response = await fetch(`/api/spaces/invitations/${inviteId}/${action}`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    const data = await readApiJson<{ message?: string }>(response);
+    if (!response.ok) throw new Error(data.message || (data as { error?: string }).error || 'Ftesa nuk mund të përpunohej.');
+    setNotifications((current) => current.filter((notification) => notification.id !== notificationId));
+    notificationsEtagRef.current = '';
+    window.dispatchEvent(new Event('virtuo:data-change'));
+    return data.message || (action === 'accept' ? 'Ftesa u pranua.' : 'Ftesa u refuzua.');
+  };
+
   const handleUnavailableNotification = useCallback(async (notificationId: string) => {
     setNotifications((current) => current.filter((notification) => notification.id !== notificationId));
     notificationsEtagRef.current = '';
@@ -193,6 +209,7 @@ export default function App() {
             onMarkAsRead={handleMarkAsRead}
             onMarkAllAsRead={handleMarkAllAsRead}
             onOpenTask={handleOpenTask}
+            onRespondToSpaceInvite={handleSpaceInviteResponse}
           />
           <Dashboard
             currentUser={user}

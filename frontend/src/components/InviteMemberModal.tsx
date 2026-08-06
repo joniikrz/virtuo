@@ -3,20 +3,19 @@ import { User, Space } from '../types';
 
 interface InviteMemberModalProps {
   activeSpace: Space;
-  users: User[];
   spaceMembers: User[];
   onClose: () => void;
-  onSubmit: (userId: string) => Promise<void>;
+  onSubmit: (email: string) => Promise<void>;
   onRemove: (userId: string) => Promise<void>;
   errorMsg: string;
 }
 
-export default function InviteMemberModal({ activeSpace, users, spaceMembers, onClose, onSubmit, onRemove, errorMsg }: InviteMemberModalProps) {
-  const [selectedInviteUser, setSelectedInviteUser] = useState('');
+export default function InviteMemberModal({ activeSpace, spaceMembers, onClose, onSubmit, onRemove, errorMsg }: InviteMemberModalProps) {
+  const [inviteEmail, setInviteEmail] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(selectedInviteUser);
+    void onSubmit(inviteEmail.trim().toLowerCase());
   };
 
   return (
@@ -30,22 +29,19 @@ export default function InviteMemberModal({ activeSpace, users, spaceMembers, on
           <div className="modal-body">
             {errorMsg && <div style={{ color: 'hsl(var(--accent-danger))', marginBottom: '15px' }}>{errorMsg}</div>}
             <div className="form-group">
-              <label>Shto një përdorues</label>
-              <select 
+              <label htmlFor="invite-email">Fto me email</label>
+              <input
+                id="invite-email"
+                type="email"
                 className="input-field"
-                value={selectedInviteUser}
-                onChange={e => setSelectedInviteUser(e.target.value)}
+                value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+                placeholder="emri@kompania.com"
+                maxLength={254}
+                autoComplete="email"
                 required
-              >
-                <option value="">Zgjidh një anëtar...</option>
-                {users
-                  .filter(u => !spaceMembers.some(m => m.id === u.id))
-                  .map(u => (
-                    <option key={u.id} value={u.id}>
-                      {u.firstName} {u.lastName} ({u.email}) - [{u.role}]
-                    </option>
-                  ))}
-              </select>
+              />
+              <small className="field-help">Përdoruesi duhet të jetë i regjistruar. Ai bëhet anëtar vetëm pasi ta pranojë ftesën te Njoftimet.</small>
             </div>
             <div className="form-group">
               <label>Anëtarët aktualë ({spaceMembers.length})</label>
@@ -61,7 +57,7 @@ export default function InviteMemberModal({ activeSpace, users, spaceMembers, on
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Anulo</button>
-            <button type="submit" className="btn btn-primary">Shto anëtarin</button>
+            <button type="submit" className="btn btn-primary">Dërgo ftesën</button>
           </div>
         </form>
       </div>

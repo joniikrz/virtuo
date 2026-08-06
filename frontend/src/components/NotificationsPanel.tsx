@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { Bell, CheckCheck, ChevronRight, Inbox, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Bell, Check, CheckCheck, ChevronRight, Inbox, LoaderCircle, X, XCircle } from 'lucide-react';
 import { Notification } from '../types';
 
 interface NotificationsPanelProps {
@@ -7,12 +7,30 @@ interface NotificationsPanelProps {
   onMarkAsRead: (id: string) => void;
   onMarkAllAsRead: () => void;
   onOpenTask: (taskId: string, notificationId: string) => void;
+  onRespondToSpaceInvite: (inviteId: string, action: 'accept' | 'reject', notificationId: string) => Promise<string>;
   isOpen: boolean;
   onClose: () => void;
 }
 
-export default function NotificationsPanel({ notifications, onMarkAsRead, onMarkAllAsRead, onOpenTask, isOpen, onClose }: NotificationsPanelProps) {
+export default function NotificationsPanel({ notifications, onMarkAsRead, onMarkAllAsRead, onOpenTask, onRespondToSpaceInvite, isOpen, onClose }: NotificationsPanelProps) {
   const unreadCount = notifications.filter((notification) => !notification.isRead).length;
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const respondToInvite = async (notification: Notification, action: 'accept' | 'reject') => {
+    const inviteId = notification.spaceInviteId || notification.resourceId;
+    if (!inviteId || respondingId) return;
+    setRespondingId(notification.id);
+    setActionMessage(null);
+    try {
+      const message = await onRespondToSpaceInvite(inviteId, action, notification.id);
+      setActionMessage({ type: 'success', text: message });
+    } catch (error) {
+      setActionMessage({ type: 'error', text: error instanceof Error ? error.message : 'Ftesa nuk mund të përpunohej.' });
+    } finally {
+      setRespondingId(null);
+    }
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -52,6 +70,7 @@ export default function NotificationsPanel({ notifications, onMarkAsRead, onMark
         )}
 
         <div className="notification-drawer__list">
+          {actionMessage && <div className={`notification-invite-feedback ${actionMessage.type}`} role="status">{actionMessage.text}</div>}
           {notifications.length === 0 ? (
             <div className="notification-drawer__empty">
               <span><Inbox size={26} /></span>
@@ -59,28 +78,50 @@ export default function NotificationsPanel({ notifications, onMarkAsRead, onMark
               <p>Kur të ketë aktivitet të ri në detyrat e tua, do të shfaqet këtu.</p>
             </div>
           ) : (
-            notifications.map((notification) => (
-              <button
-                type="button"
-                key={notification.id}
-                className={`notification-drawer__item ${notification.isRead ? '' : 'unread'}`}
-                onClick={() => {
-                  if (!notification.isRead) onMarkAsRead(notification.id);
-                  if (notification.taskId) onOpenTask(notification.taskId, notification.id);
-                }}
-                title={notification.taskId ? 'Hap detyrën' : 'Shëno si të lexuar'}
-              >
-                <span className="notification-drawer__status" aria-hidden="true" />
-                <div className="notification-drawer__content">
-                  <strong>{notification.title}</strong>
-                  <p>{notification.message}</p>
-                  <time dateTime={notification.createdAt}>
-                    {new Date(notification.createdAt).toLocaleString('sq-AL', { dateStyle: 'medium', timeStyle: 'short' })}
-                  </time>
-                </div>
-                {notification.taskId && <ChevronRight className="notification-drawer__open-icon" size={17} aria-hidden="true" />}
-              </button>
-            ))
+            notifications.map((notification) => {
+              const isSpaceInvite = notification.type === 'SPACE_INVITE' && Boolean(notification.spaceInviteId || notification.resourceId);
+              if (isSpaceInvite) {
+                const isResponding = respondingId === notification.id;
+                return (
+                  <article key={notification.id} className={`notification-drawer__item notification-drawer__invite ${notification.isRead ? '' : 'unread'}`}>
+                    <span className="notification-drawer__status" aria-hidden="true" />
+                    <div className="notification-drawer__content">
+                      <strong>{notification.title}</strong>
+                      <p>{notification.message}</p>
+                      <time dateTime={notification.createdAt}>{new Date(notification.createdAt).toLocaleString('sq-AL', { dateStyle: 'medium', timeStyle: 'short' })}</time>
+                      <div className="notification-invite-actions">
+                        <button type="button" className="btn btn-primary btn-sm" disabled={isResponding} onClick={() => void respondToInvite(notification, 'accept')}>
+                          {isResponding ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />} Prano
+                        </button>
+                        <button type="button" className="btn btn-secondary btn-sm" disabled={isResponding} onClick={() => void respondToInvite(notification, 'reject')}>
+                          <XCircle size={15} /> Refuzo
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              }
+              return (
+                <button
+                  type="button"
+                  key={notification.id}
+                  className={`notification-drawer__item ${notification.isRead ? '' : 'unread'}`}
+                  onClick={() => {
+                    if (!notification.isRead) onMarkAsRead(notification.id);
+                    if (notification.taskId) onOpenTask(notification.taskId, notification.id);
+                  }}
+                  title={notification.taskId ? 'Hap detyrën' : 'Shëno si të lexuar'}
+                >
+                  <span className="notification-drawer__status" aria-hidden="true" />
+                  <div className="notification-drawer__content">
+                    <strong>{notification.title}</strong>
+                    <p>{notification.message}</p>
+                    <time dateTime={notification.createdAt}>{new Date(notification.createdAt).toLocaleString('sq-AL', { dateStyle: 'medium', timeStyle: 'short' })}</time>
+                  </div>
+                  {notification.taskId && <ChevronRight className="notification-drawer__open-icon" size={17} aria-hidden="true" />}
+                </button>
+              );
+            })
           )}
         </div>
       </aside>

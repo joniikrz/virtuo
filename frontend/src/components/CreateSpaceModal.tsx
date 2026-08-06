@@ -1,24 +1,17 @@
-import React, { useMemo, useState } from 'react';
-import { User } from '../types';
+import React, { useState } from 'react';
 
 interface CreateSpaceModalProps {
-  users: User[];
   onClose: () => void;
-  onSubmit: (name: string, memberIds: string[]) => Promise<void>;
+  onSubmit: (name: string) => Promise<void>;
   errorMsg: string;
 }
 
-export default function CreateSpaceModal({ users, onClose, onSubmit, errorMsg }: CreateSpaceModalProps) {
+export default function CreateSpaceModal({ onClose, onSubmit, errorMsg }: CreateSpaceModalProps) {
   const [spaceName, setSpaceName] = useState('');
-  const [memberIds, setMemberIds] = useState<string[]>([]);
-  const allSelected = useMemo(() => users.length > 0 && memberIds.length === users.length, [memberIds, users]);
-
-  const toggleMember = (id: string) => setMemberIds((current) => current.includes(id) ? current.filter((memberId) => memberId !== id) : [...current, id]);
-  const toggleAll = () => setMemberIds(allSelected ? [] : users.map((user) => user.id));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(spaceName, memberIds);
+    void onSubmit(spaceName);
   };
 
   return (
@@ -35,25 +28,9 @@ export default function CreateSpaceModal({ users, onClose, onSubmit, errorMsg }:
               <label>Emri i Hapësirës</label>
               <input type="text" className="input-field" value={spaceName} onChange={(e) => setSpaceName(e.target.value)} placeholder="p.sh. Marketing" required />
             </div>
-            <div className="form-group">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '12px' }}>
-                <div>
-                  <label style={{ marginBottom: '4px' }}>Pjesëmarrësit</label>
-                  <p style={{ margin: 0, fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>
-                    Zgjidh kë e sheh hapësirën. Pa pjesëmarrës të zgjedhur, hapësira është vetëm për ty (My Tasks).
-                  </p>
-                </div>
-                <button type="button" className="btn btn-secondary btn-sm" onClick={toggleAll}>{allSelected ? 'Hiq të gjithë' : 'Zgjidh të gjithë'}</button>
-              </div>
-              <div style={{ marginTop: '12px', maxHeight: '185px', overflowY: 'auto', border: '1px solid hsl(var(--border))', borderRadius: 'var(--border-radius-md)', padding: '6px 12px' }}>
-                {users.length ? users.map((user) => (
-                  <label key={user.id} style={{ display: 'flex', gap: '10px', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid hsl(var(--border) / 0.55)', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={memberIds.includes(user.id)} onChange={() => toggleMember(user.id)} />
-                    <span>{user.firstName} {user.lastName}</span>
-                    <span style={{ color: 'hsl(var(--text-muted))', fontSize: '0.8rem' }}>{user.email}</span>
-                  </label>
-                )) : <p style={{ margin: '8px 0', color: 'hsl(var(--text-muted))', fontSize: '0.85rem' }}>Nuk ka përdorues të tjerë të regjistruar.</p>}
-              </div>
+            <div className="space-private-note">
+              <strong>Hapësirë private</strong>
+              <p>Fillimisht krijohet vetëm për ty. Pasi të krijohet, mund t'i ftosh anëtarët duke shkruar email-in e tyre.</p>
             </div>
           </div>
           <div className="modal-footer">

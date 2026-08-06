@@ -48,7 +48,6 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
   const isSpaceOwner = Boolean(activeSpace && activeSpace.createdBy?.id === currentUser.id);
   const canManageActiveSpace = isSpaceOwner;
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [spaceMembers, setSpaceMembers] = useState<User[]>([]);
   const canCreateTask = Boolean(activeSpace && spaceMembers.some((member) => member.id === currentUser.id));
 
@@ -129,16 +128,6 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
           if (!current) return data[0];
           return data.find((space: Space) => space.id === current.id) || data[0];
         });
-      }
-    } catch (err) { console.error(err); }
-  };
-
-  const fetchAllUsers = async () => {
-    try {
-      const res = await fetch('/api/auth/users');
-      if (res.ok) {
-        const data = await res.json();
-        setUsers(data);
       }
     } catch (err) { console.error(err); }
   };
@@ -240,8 +229,13 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
   };
 
   useEffect(() => {
-    fetchSpaces();
-    fetchAllUsers();
+    void fetchSpaces();
+  }, []);
+
+  useEffect(() => {
+    const refreshSpaces = () => void fetchSpaces();
+    window.addEventListener('virtuo:data-change', refreshSpaces);
+    return () => window.removeEventListener('virtuo:data-change', refreshSpaces);
   }, []);
 
   useEffect(() => {
@@ -301,13 +295,13 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
   }, [selectedTask?.id, fetchTaskDetail]);
 
   // Handlers
-  const handleCreateSpace = async (name: string, memberIds: string[]) => {
+  const handleCreateSpace = async (name: string) => {
     setErrorMsg('');
     try {
       const res = await fetch('/api/spaces', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, memberIds }),
+        body: JSON.stringify({ name }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -322,21 +316,21 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
     }
   };
 
-  const handleInviteMember = async (userId: string) => {
+  const handleInviteMember = async (email: string) => {
     setErrorMsg('');
     if (!activeSpace) return;
     try {
-      const res = await fetch(`/api/spaces/${activeSpace.id}/members`, {
+      const res = await fetch(`/api/spaces/${activeSpace.id}/invitations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({ email }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
       setShowInviteMember(false);
-      await Promise.all([fetchSpaceMembers(activeSpace.id), fetchSpaces()]);
-      setSuccessMsg('Anëtari u shtua me sukses në hapësirë.');
+      setSuccessMsg(data.message || 'Ftesa u dërgua me sukses.');
+      window.dispatchEvent(new Event('virtuo:data-change'));
     } catch (err: any) {
       setErrorMsg(err.message);
     }
@@ -398,7 +392,6 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
       if (!res.ok) throw new Error(data.error);
 
       setShowRegisterUser(false);
-      fetchAllUsers();
       setSuccessMsg('Llogaria e re u krijua me sukses.');
     } catch (err: any) {
       setErrorMsg(err.message);
@@ -617,7 +610,6 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
       {/* Modals */}
       {showCreateSpace && (
         <CreateSpaceModal 
-          users={users}
           onClose={() => setShowCreateSpace(false)} 
           onSubmit={handleCreateSpace} 
           errorMsg={errorMsg} 
@@ -627,7 +619,6 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
       {showInviteMember && activeSpace && (
         <InviteMemberModal 
           activeSpace={activeSpace}
-          users={users}
           spaceMembers={spaceMembers}
           onClose={() => setShowInviteMember(false)}
           onSubmit={handleInviteMember}

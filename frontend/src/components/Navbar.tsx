@@ -13,9 +13,10 @@ interface NavbarProps {
   onMarkAsRead: (id: string) => void;
   onMarkAllAsRead: () => void;
   onOpenTask: (taskId: string, notificationId: string) => void;
+  onRespondToSpaceInvite: (inviteId: string, action: 'accept' | 'reject', notificationId: string) => Promise<string>;
 }
 
-export default function Navbar({ user, onLogout, onUserUpdate, notifications, onMarkAsRead, onMarkAllAsRead, onOpenTask }: NavbarProps) {
+export default function Navbar({ user, onLogout, onUserUpdate, notifications, onMarkAsRead, onMarkAllAsRead, onOpenTask, onRespondToSpaceInvite }: NavbarProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   
@@ -100,6 +101,7 @@ export default function Navbar({ user, onLogout, onUserUpdate, notifications, on
         onClose={() => setShowNotifications(false)}
         onMarkAsRead={onMarkAsRead}
         onMarkAllAsRead={onMarkAllAsRead}
+        onRespondToSpaceInvite={onRespondToSpaceInvite}
           onOpenTask={(taskId, notificationId) => {
             setShowNotifications(false);
             onOpenTask(taskId, notificationId);

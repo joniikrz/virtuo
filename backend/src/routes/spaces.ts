@@ -8,6 +8,11 @@ const router = Router();
 const uploadDirectory = path.resolve(process.env.UPLOAD_DIR || 'uploads');
 const spaceColors = new Set(['#0079BF', '#D29034', '#519839', '#B04632', '#89609E', '#CD5A91', '#4BBF6B', '#00AEEF', '#838C91']);
 const maxSpaceMembers = 250;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function normalizeEmail(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toLowerCase().slice(0, 254) : '';
+}
 
 async function removeStoredFiles(filePaths: string[]) {
   await Promise.all(filePaths.map(async (filePath) => {
@@ -102,7 +107,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
  */
 router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
-  const { color, memberIds } = req.body;
+  const { color } = req.body;
   const creatorId = req.user?.id;
 
   if (!name || name.length > 100) {
@@ -114,21 +119,8 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   }
 
   const spaceColor = typeof color === 'string' && spaceColors.has(color) ? color : '#0079BF';
-  const requestedMemberIds = Array.isArray(memberIds)
-    ? [...new Set(memberIds.filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= 100))]
-    : [];
-  const allMemberIds = [...new Set([creatorId, ...requestedMemberIds])];
-  if (allMemberIds.length > maxSpaceMembers) {
-    return res.status(400).json({ error: `Një hapësirë mund të krijohet me maksimumi ${maxSpaceMembers} anëtarë` });
-  }
 
   try {
-    if (requestedMemberIds.length) {
-      const foundUsers = await prisma.user.count({ where: { id: { in: requestedMemberIds } } });
-      if (foundUsers !== requestedMemberIds.length) {
-        return res.status(400).json({ error: 'NjÃ« ose mÃ« shumÃ« pÃ«rdorues tÃ« zgjedhur nuk ekzistojnÃ«' });
-      }
-    }
     const result = await prisma.$transaction(async (tx) => {
       const newSpace = await tx.space.create({
         data: {
@@ -140,7 +132,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       });
 
       await tx.spaceMember.createMany({
-        data: allMemberIds.map((userId) => ({ spaceId: newSpace.id, userId })),
+        data: [{ spaceId: newSpace.id, userId: creatorId }],
       });
 
       return tx.space.findUnique({
@@ -157,73 +149,151 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 });
 
 /**
- * POST /api/spaces/:id/members
- * Fton një përdorues në një Space
+ * POST /api/spaces/:id/invitations
+ * Pronari dërgon një ftesë te një përdorues i regjistruar, sipas email-it.
  */
-router.post('/:id/members', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.post('/:id/invitations', authenticateToken, async (req: AuthRequest, res: Response) => {
   const spaceId = req.params.id;
-  const { userId } = req.body;
+  const email = normalizeEmail(req.body.email);
   const currentUserId = req.user?.id;
-  if (typeof userId !== 'string' || !userId || userId.length > 100) {
-    return res.status(400).json({ error: 'ID e përdoruesit është e detyrueshme' });
-  }
+  if (!currentUserId) return res.status(401).json({ error: 'I paautorizuar' });
+  if (!EMAIL_REGEX.test(email)) return res.status(400).json({ error: 'Shkruaj një email të vlefshëm' });
 
   try {
     const space = await prisma.space.findUnique({ where: { id: spaceId } });
-
-    if (!space) {
-      return res.status(404).json({ error: 'Hapësira e punës nuk u gjet' });
-    }
-
+    if (!space) return res.status(404).json({ error: 'Hapësira e punës nuk u gjet' });
     if (space.createdById !== currentUserId) {
-      return res.status(403).json({ error: 'Vetëm krijuesi i hapësirës mund të menaxhojë anëtarët' });
+      return res.status(403).json({ error: 'Vetëm krijuesi i hapësirës mund të ftojë anëtarë' });
     }
 
-    const userToInvite = await prisma.user.findUnique({ where: { id: userId } });
+    const userToInvite = await prisma.user.findUnique({ where: { email } });
+    if (!userToInvite) return res.status(404).json({ error: 'Nuk ekziston asnjë përdorues i regjistruar me këtë email' });
+    if (userToInvite.id === currentUserId) return res.status(400).json({ error: 'Ti je tashmë pronari i kësaj hapësire' });
 
-    if (!userToInvite) {
-      return res.status(404).json({ error: 'Përdoruesi që dëshironi të ftoni nuk u gjet' });
+    const [existingMember, existingInvite, memberCount, pendingInviteCount] = await Promise.all([
+      prisma.spaceMember.findUnique({ where: { spaceId_userId: { spaceId, userId: userToInvite.id } } }),
+      prisma.spaceInvite.findUnique({ where: { spaceId_invitedUserId: { spaceId, invitedUserId: userToInvite.id } } }),
+      prisma.spaceMember.count({ where: { spaceId } }),
+      prisma.spaceInvite.count({ where: { spaceId, status: 'PENDING' } }),
+    ]);
+    if (existingMember) return res.status(409).json({ error: 'Ky përdorues është tashmë anëtar i hapësirës' });
+    if (existingInvite?.status === 'PENDING') return res.status(409).json({ error: 'Ky përdorues e ka tashmë një ftesë në pritje' });
+    if (memberCount + pendingInviteCount >= maxSpaceMembers) {
+      return res.status(409).json({ error: `Hapësira mund të ketë maksimumi ${maxSpaceMembers} anëtarë` });
     }
 
-    const existingMember = await prisma.spaceMember.findUnique({
-      where: {
-        spaceId_userId: {
-          spaceId,
-          userId,
+    const invite = await prisma.$transaction(async (tx) => {
+      const savedInvite = await tx.spaceInvite.upsert({
+        where: { spaceId_invitedUserId: { spaceId, invitedUserId: userToInvite.id } },
+        create: { spaceId, invitedUserId: userToInvite.id, invitedById: currentUserId },
+        update: { status: 'PENDING', invitedById: currentUserId, respondedAt: null, createdAt: new Date() },
+      });
+      await tx.notification.deleteMany({ where: { spaceInviteId: savedInvite.id } });
+      await tx.notification.create({
+        data: {
+          userId: userToInvite.id,
+          type: 'SPACE_INVITE',
+          title: 'Ftesë në hapësirë',
+          message: `${req.user?.firstName || 'Një përdorues'} ${req.user?.lastName || ''} të ftoi në hapësirën: ${space.name}`.replace(/\s+/g, ' ').trim(),
+          resourceType: 'SPACE_INVITE',
+          resourceId: savedInvite.id,
+          spaceInviteId: savedInvite.id,
         },
-      },
+      });
+      return savedInvite;
     });
 
-    if (existingMember) {
-      return res.status(400).json({ error: 'Përdoruesi është tashmë anëtar i kësaj hapësire' });
-    }
-
-    const memberCount = await prisma.spaceMember.count({ where: { spaceId } });
-    if (memberCount >= maxSpaceMembers) {
-      return res.status(400).json({ error: `Hapësira mund të ketë maksimumi ${maxSpaceMembers} anëtarë` });
-    }
-
-    const member = await prisma.spaceMember.create({
-      data: {
-        spaceId,
-        userId,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-      },
+    return res.status(201).json({
+      message: `Ftesa iu dërgua ${userToInvite.email}`,
+      invite: { id: invite.id, email: userToInvite.email, status: invite.status },
     });
-
-    return res.status(201).json({ message: 'Anëtari u shtua me sukses', member });
   } catch (error) {
-    console.error('Add member error:', error);
-    return res.status(500).json({ error: 'Ndodhi një gabim gjatë ftesës së anëtarit' });
+    console.error('Invite member error:', error);
+    return res.status(500).json({ error: 'Ndodhi një gabim gjatë dërgimit të ftesës' });
+  }
+});
+
+router.post('/invitations/:inviteId/accept', authenticateToken, async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
+
+  try {
+    const invite = await prisma.spaceInvite.findUnique({ where: { id: req.params.inviteId }, include: { space: true } });
+    if (!invite || invite.invitedUserId !== userId || invite.status !== 'PENDING') {
+      return res.status(404).json({ error: 'Ftesa nuk u gjet ose nuk është më aktive' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const existingMember = await tx.spaceMember.findUnique({ where: { spaceId_userId: { spaceId: invite.spaceId, userId } } });
+      if (!existingMember) {
+        const memberCount = await tx.spaceMember.count({ where: { spaceId: invite.spaceId } });
+        if (memberCount >= maxSpaceMembers) throw new Error('SPACE_FULL');
+      }
+      const claimed = await tx.spaceInvite.updateMany({
+        where: { id: invite.id, invitedUserId: userId, status: 'PENDING' },
+        data: { status: 'ACCEPTED', respondedAt: new Date() },
+      });
+      if (claimed.count !== 1) throw new Error('INVITE_NOT_PENDING');
+      await tx.spaceMember.upsert({
+        where: { spaceId_userId: { spaceId: invite.spaceId, userId } },
+        create: { spaceId: invite.spaceId, userId },
+        update: {},
+      });
+      await tx.notification.deleteMany({ where: { spaceInviteId: invite.id } });
+      await tx.notification.create({
+        data: {
+          userId: invite.invitedById,
+          type: 'SPACE_INVITE_ACCEPTED',
+          title: 'Ftesa u pranua',
+          message: `${req.user?.firstName || 'Përdoruesi'} ${req.user?.lastName || ''} pranoi ftesën për: ${invite.space.name}`.replace(/\s+/g, ' ').trim(),
+          resourceType: 'SPACE',
+          resourceId: invite.spaceId,
+        },
+      });
+    });
+
+    return res.json({ message: `U bëre anëtar i hapësirës ${invite.space.name}`, spaceId: invite.spaceId });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'SPACE_FULL') return res.status(409).json({ error: 'Hapësira e ka arritur numrin maksimal të anëtarëve' });
+    if (error instanceof Error && error.message === 'INVITE_NOT_PENDING') return res.status(409).json({ error: 'Kjo ftesë është trajtuar tashmë' });
+    console.error('Accept space invite error:', error);
+    return res.status(500).json({ error: 'Ftesa nuk mund të pranohej' });
+  }
+});
+
+router.post('/invitations/:inviteId/reject', authenticateToken, async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
+
+  try {
+    const invite = await prisma.spaceInvite.findUnique({ where: { id: req.params.inviteId }, include: { space: true } });
+    if (!invite || invite.invitedUserId !== userId || invite.status !== 'PENDING') {
+      return res.status(404).json({ error: 'Ftesa nuk u gjet ose nuk është më aktive' });
+    }
+    const rejected = await prisma.$transaction(async (tx) => {
+      const updated = await tx.spaceInvite.updateMany({
+        where: { id: invite.id, invitedUserId: userId, status: 'PENDING' },
+        data: { status: 'REJECTED', respondedAt: new Date() },
+      });
+      if (updated.count !== 1) return false;
+      await tx.notification.deleteMany({ where: { spaceInviteId: invite.id } });
+      await tx.notification.create({
+        data: {
+          userId: invite.invitedById,
+          type: 'SPACE_INVITE_REJECTED',
+          title: 'Ftesa u refuzua',
+          message: `${req.user?.firstName || 'Përdoruesi'} ${req.user?.lastName || ''} refuzoi ftesën për: ${invite.space.name}`.replace(/\s+/g, ' ').trim(),
+          resourceType: 'SPACE',
+          resourceId: invite.spaceId,
+        },
+      });
+      return true;
+    });
+    if (!rejected) return res.status(409).json({ error: 'Kjo ftesë është trajtuar tashmë' });
+    return res.json({ message: 'Ftesa u refuzua' });
+  } catch (error) {
+    console.error('Reject space invite error:', error);
+    return res.status(500).json({ error: 'Ftesa nuk mund të refuzohej' });
   }
 });
 
