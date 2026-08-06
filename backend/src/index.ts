@@ -11,6 +11,7 @@ import tasksRouter from './routes/tasks';
 import notificationsRouter from './routes/notifications';
 import tagsRouter from './routes/tags';
 import { seedDatabase } from './seed';
+import { rateLimit } from './middleware/rateLimit';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
@@ -18,9 +19,17 @@ const requestTimeoutMs = Number(process.env.REQUEST_TIMEOUT_MS) || 30000;
 
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
+app.set('query parser', 'simple');
+
+const configuredOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const allowedOrigins = new Set(configuredOrigins);
 
 app.use((req, res, next) => {
-  const requestId = typeof req.headers['x-request-id'] === 'string' && req.headers['x-request-id'].length <= 100
+  const requestId = typeof req.headers['x-request-id'] === 'string'
+    && /^[A-Za-z0-9._-]{1,100}$/.test(req.headers['x-request-id'])
     ? req.headers['x-request-id']
     : crypto.randomUUID();
   res.setHeader('X-Request-Id', requestId);
@@ -28,18 +37,45 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
   if (req.secure) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   next();
 });
 
 // Konfigurimi i CORS
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173', // Adresa e frontend-it me Vite
+  origin: (origin, callback) => callback(null, !origin || allowedOrigins.has(origin)),
   credentials: true, // Lejon kalimin e cookies
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'If-None-Match', 'X-Request-Id'],
+  maxAge: 600,
 }));
 
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
 app.use(cookieParser());
+
+app.use('/api', (req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  const origin = req.headers.origin;
+  const fetchSite = req.headers['sec-fetch-site'];
+  const forwardedProto = typeof req.headers['x-forwarded-proto'] === 'string' ? req.headers['x-forwarded-proto'].split(',')[0] : req.protocol;
+  const forwardedHost = typeof req.headers['x-forwarded-host'] === 'string' ? req.headers['x-forwarded-host'].split(',')[0] : req.headers.host;
+  const sameOrigin = Boolean(origin && forwardedHost && origin === `${forwardedProto}://${forwardedHost}`);
+  if (fetchSite === 'cross-site' || (origin && !sameOrigin && !allowedOrigins.has(origin))) {
+    return res.status(403).json({ error: 'Kërkesa ndër-faqe u bllokua' });
+  }
+  return next();
+});
+
+app.use('/api/auth/login', rateLimit({ scope: 'login', windowMs: 15 * 60 * 1000, max: 10 }));
+app.use('/api/auth/forgot-password', rateLimit({ scope: 'recovery', windowMs: 15 * 60 * 1000, max: 5 }));
+app.use('/api/auth/reset-password', rateLimit({ scope: 'reset', windowMs: 15 * 60 * 1000, max: 5 }));
+app.use('/api/auth/register', rateLimit({ scope: 'register', windowMs: 60 * 60 * 1000, max: 10 }));
+app.use('/api/auth/setup', rateLimit({ scope: 'setup', windowMs: 60 * 60 * 1000, max: 3 }));
+app.use('/api', rateLimit({ scope: 'api', windowMs: 60 * 1000, max: 600 }));
 
 // Montimi i rrugëve (Routes)
 app.use('/api/auth', authRouter);
@@ -70,9 +106,16 @@ app.use('/api', (_req, res) => res.status(404).json({ error: 'Endpoint-i nuk u g
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err.name === 'MulterError') {
-    return res.status(400).json({ error: 'Ngarkimi i skedarit dështoi: ' + err.message });
+    return res.status(400).json({ error: 'Skedari nuk u pranua. Kontrollo madhësinë dhe provo përsëri.' });
   }
-  console.error('Unhandled error:', err);
+  if (err.name === 'UploadValidationError') {
+    return res.status(400).json({ error: err.message });
+  }
+  if (err instanceof SyntaxError && 'body' in err) {
+    return res.status(400).json({ error: 'JSON-i i kërkesës nuk është i vlefshëm' });
+  }
+  const requestId = res.getHeader('X-Request-Id');
+  console.error(`Unhandled error [${requestId || 'pa-id'}]:`, process.env.NODE_ENV === 'production' ? err.message : err);
   return res.status(500).json({ error: 'Ndodhi një gabim i papritur në server' });
 });
 

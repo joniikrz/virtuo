@@ -14,7 +14,8 @@ create_backup() {
   db_output="/backups/virtuo-db_${timestamp}.dump.enc"
   uploads_output="/backups/virtuo-uploads_${timestamp}.tar.gz.enc"
   cleanup_failed_backup() {
-    rm -f "$db_dump" "$uploads_archive" "${db_output}.partial" "${uploads_output}.partial"
+    rm -f "$db_dump" "$uploads_archive" "${db_output}.partial" "${uploads_output}.partial" \
+      "${db_output}.hmac.partial" "${uploads_output}.hmac.partial"
   }
 
   echo "[Backup] Duke krijuar backup-in ${timestamp}"
@@ -25,12 +26,16 @@ create_backup() {
   openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 -in "$uploads_archive" -out "${uploads_output}.partial" -pass env:BACKUP_ENCRYPTION_KEY || { cleanup_failed_backup; return 1; }
   mv "${db_output}.partial" "$db_output" || { cleanup_failed_backup; return 1; }
   mv "${uploads_output}.partial" "$uploads_output" || { cleanup_failed_backup; return 1; }
+  openssl dgst -sha256 -hmac "$BACKUP_ENCRYPTION_KEY" "$db_output" | awk '{print $2}' > "${db_output}.hmac.partial" || { cleanup_failed_backup; return 1; }
+  openssl dgst -sha256 -hmac "$BACKUP_ENCRYPTION_KEY" "$uploads_output" | awk '{print $2}' > "${uploads_output}.hmac.partial" || { cleanup_failed_backup; return 1; }
+  mv "${db_output}.hmac.partial" "${db_output}.hmac" || { cleanup_failed_backup; return 1; }
+  mv "${uploads_output}.hmac.partial" "${uploads_output}.hmac" || { cleanup_failed_backup; return 1; }
   sha256sum "$db_output" > "${db_output}.sha256" || return 1
   sha256sum "$uploads_output" > "${uploads_output}.sha256" || return 1
   rm -f "$db_dump" "$uploads_archive"
 
   find /backups -maxdepth 1 -type f -mtime "+${retention_days}" -delete
-  echo "[Backup] Backup-i i enkriptuar u krye me sukses"
+  echo "[Backup] Backup-i i enkriptuar dhe i autentikuar u krye me sukses"
 }
 
 while true; do

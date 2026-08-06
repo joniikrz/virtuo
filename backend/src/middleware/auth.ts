@@ -1,11 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
 import prisma from '../prisma';
+import { verifyToken } from '../security';
 
-if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
-  throw new Error('JWT_SECRET duhet të vendoset në production');
-}
-const JWT_SECRET = process.env.JWT_SECRET || 'virtuo-dev-secret-do-not-use-in-production';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -44,7 +40,11 @@ export const authenticateToken = async (
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+    const decoded = verifyToken(token) as { userId?: string; sessionVersion?: number };
+    if (!decoded.userId) {
+      res.status(401).json({ error: 'Sesioni nuk është i vlefshëm' });
+      return;
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
@@ -53,6 +53,11 @@ export const authenticateToken = async (
 
     if (!user) {
       res.status(401).json({ error: 'Përdoruesi nuk u gjet ose është fshirë' });
+      return;
+    }
+
+    if ((decoded.sessionVersion ?? 0) !== user.sessionVersion) {
+      res.status(401).json({ error: 'Sesioni ka skaduar. Ju lutem kyçuni përsëri.' });
       return;
     }
 

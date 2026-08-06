@@ -25,24 +25,24 @@ Vendosni vlera të sigurta për:
 - `ADMIN_PASSWORD`
 - `BACKUP_ENCRYPTION_KEY`, nëse aktivizohen backup-et
 
-Validoni dhe nisni aplikacionin:
+Vendosni certifikatën sipas [docs/SECURITY.md](docs/SECURITY.md), pastaj validoni dhe nisni aplikacionin me HTTPS:
 
 ```bash
-docker compose config --quiet
-docker compose up -d --build
-docker compose ps
+docker compose -f docker-compose.yml -f docker-compose.tls.yml config --quiet
+docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.tls.yml ps
 ```
 
-Aplikacioni hapet në `http://IP_E_SERVERIT` ose në hostname-in e konfiguruar.
+Aplikacioni duhet të publikohet me HTTPS. Udhëzimet dhe overlay-i TLS janë te [docs/SECURITY.md](docs/SECURITY.md).
 
 ## Përditësimi në VM
 
 ```bash
 cd ~/virtuo
 git pull --ff-only
-docker compose config --quiet
-sudo docker compose up -d --build
-sudo docker compose ps
+docker compose -f docker-compose.yml -f docker-compose.tls.yml config --quiet
+sudo docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d --build
+sudo docker compose -f docker-compose.yml -f docker-compose.tls.yml ps
 ```
 
 Shërbimi `migrate` përditëson schema-n dhe inicializon rolet para nisjes së backend-it.
@@ -75,4 +75,4 @@ Backup-et e databazës dhe uploads ruhen në `./backups`. Kopjojini edhe jashtë
 
 ## Dokumentimi production
 
-Udhëzimet e plota për tuning, scale-out, health checks, backup, restore dhe load testing gjenden te [docs/OPERATIONS.md](docs/OPERATIONS.md).
+Udhëzimet e plota për tuning, scale-out, health checks, backup, restore dhe load testing gjenden te [docs/OPERATIONS.md](docs/OPERATIONS.md). Hardening-u, HTTPS, menaxhimi i çelësave dhe enkriptimi në disk dokumentohen te [docs/SECURITY.md](docs/SECURITY.md).

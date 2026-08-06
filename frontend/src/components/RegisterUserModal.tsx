@@ -44,6 +44,7 @@ export default function RegisterUserModal({ onClose, onSubmit, errorMsg }: Regis
                 value={regFirstName} 
                 onChange={e => setRegFirstName(e.target.value)} 
                 placeholder="Filan" 
+                maxLength={60}
                 required 
               />
             </div>
@@ -55,6 +56,7 @@ export default function RegisterUserModal({ onClose, onSubmit, errorMsg }: Regis
                 value={regLastName} 
                 onChange={e => setRegLastName(e.target.value)} 
                 placeholder="Fisteku" 
+                maxLength={60}
                 required 
               />
             </div>
@@ -66,6 +68,7 @@ export default function RegisterUserModal({ onClose, onSubmit, errorMsg }: Regis
                 value={regEmail} 
                 onChange={e => setRegEmail(e.target.value)} 
                 placeholder="filan@kompania.com" 
+                maxLength={254}
                 required 
               />
             </div>
@@ -77,6 +80,8 @@ export default function RegisterUserModal({ onClose, onSubmit, errorMsg }: Regis
                 value={regPassword} 
                 onChange={e => setRegPassword(e.target.value)} 
                 placeholder="Fjalëkalim i sigurt..." 
+                minLength={12}
+                maxLength={128}
                 required 
               />
             </div>
@@ -99,8 +104,8 @@ export default function RegisterUserModal({ onClose, onSubmit, errorMsg }: Regis
                 className="input-field"
                 value={regRecoveryCode}
                 onChange={e => setRegRecoveryCode(e.target.value)}
-                placeholder="Së paku 6 karaktere"
-                minLength={6}
+                placeholder="10–64 karaktere"
+                minLength={10}
                 maxLength={64}
                 required
               />

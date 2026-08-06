@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import prisma from './prisma';
+import { BCRYPT_ROUNDS, passwordError } from './security';
 
 const DEFAULT_ADMIN = {
   email: 'admin@virtuo.local',
@@ -38,7 +39,11 @@ export async function seedDatabase(): Promise<void> {
   });
 
   if (!existingAdmin) {
-    const passwordHash = await bcrypt.hash(adminPassword, 10);
+    if (process.env.NODE_ENV === 'production') {
+      const invalidPassword = passwordError(adminPassword);
+      if (invalidPassword) throw new Error(`ADMIN_PASSWORD: ${invalidPassword}`);
+    }
+    const passwordHash = await bcrypt.hash(adminPassword, BCRYPT_ROUNDS);
     await prisma.user.create({
       data: {
         email: adminEmail,

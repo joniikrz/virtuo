@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
-import jwt from 'jsonwebtoken';
+import { signSessionToken } from '../security';
 
 vi.mock('../prisma', () => ({
   default: {
@@ -19,14 +19,12 @@ vi.mock('../prisma', () => ({
 import { app } from '../index';
 import prisma from '../prisma';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
-
 describe('Notifications API caching and updates', () => {
   let token: string;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    token = jwt.sign({ userId: 'user-1' }, JWT_SECRET, { expiresIn: '1h' });
+    token = signSessionToken('user-1', 0);
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
       id: 'user-1',
       email: 'user@virtuo.local',
@@ -35,6 +33,7 @@ describe('Notifications API caching and updates', () => {
       emailNotifications: true,
       inAppNotifications: true,
       recoveryCodeHash: null,
+      sessionVersion: 0,
       role: { name: 'USER' },
     } as never);
     vi.mocked(prisma.notification.findFirst).mockResolvedValue({

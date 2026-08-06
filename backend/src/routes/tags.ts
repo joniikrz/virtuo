@@ -25,10 +25,15 @@ router.get('/tags', authenticateToken, async (req: AuthRequest, res: Response): 
  * Krijon një tag të ri (Vetëm Admin)
  */
 router.post('/tags', authenticateToken, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
-  const { name, color } = req.body;
+  const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
+  const color = typeof req.body.color === 'string' ? req.body.color.trim() : '#6366f1';
 
-  if (!name) {
-    res.status(400).json({ error: 'Emri i tag është i detyrueshëm' });
+  if (!name || name.length > 50) {
+    res.status(400).json({ error: 'Emri i tag-ut duhet të ketë 1 deri në 50 karaktere' });
+    return;
+  }
+  if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
+    res.status(400).json({ error: 'Ngjyra e tag-ut nuk është e vlefshme' });
     return;
   }
 
@@ -40,7 +45,7 @@ router.post('/tags', authenticateToken, requireAdmin, async (req: AuthRequest, r
     }
 
     const tag = await prisma.tag.create({
-      data: { name, color: color || '#6366f1' },
+      data: { name, color },
     });
 
     res.status(201).json(tag);

@@ -1,11 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import { app } from '../index';
 import prisma from '../prisma';
-
-const TEST_JWT_SECRET = process.env.JWT_SECRET || 'virtuo-dev-secret-do-not-use-in-production';
+import { signPasswordResetToken, signSessionToken, verifyToken } from '../security';
 
 vi.mock('../prisma', () => ({
   default: {
@@ -15,6 +13,7 @@ vi.mock('../prisma', () => ({
       findMany: vi.fn(),
       count: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     role: {
       findUnique: vi.fn(),
@@ -52,7 +51,7 @@ describe('Auth Endpoints API Tests', () => {
       .post('/api/auth/register')
       .send({
         email: 'user@example.com',
-        password: 'Password123!',
+        password: 'Molla-Vjollce-2026!',
         firstName: 'Filan',
         lastName: 'Fisteku',
         recoveryCode: 'KodiIm123!',
@@ -103,11 +102,12 @@ describe('Auth Endpoints API Tests', () => {
       firstName: 'User',
       lastName: 'One',
       passwordHash,
+      sessionVersion: 0,
       roleId: 'role-user-id',
       role: { name: 'USER' },
     } as never);
     vi.mocked(prisma.user.update).mockResolvedValue({ id: 'u1' } as never);
-    const token = jwt.sign({ userId: 'u1' }, TEST_JWT_SECRET);
+    const token = signSessionToken('u1', 0);
 
     const res = await request(app)
       .put('/api/auth/change-password')
@@ -127,10 +127,11 @@ describe('Auth Endpoints API Tests', () => {
       firstName: 'User',
       lastName: 'One',
       passwordHash,
+      sessionVersion: 0,
       roleId: 'role-user-id',
       role: { name: 'USER' },
     } as never);
-    const token = jwt.sign({ userId: 'u1' }, TEST_JWT_SECRET);
+    const token = signSessionToken('u1', 0);
 
     const res = await request(app)
       .put('/api/auth/change-password')
@@ -145,7 +146,7 @@ describe('Auth Endpoints API Tests', () => {
   it('POST /api/auth/forgot-password/verify - Verifikon kodin dhe kthen token të përkohshëm', async () => {
     const recoveryCodeHash = await bcrypt.hash('KodiIm123!', 10);
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
-      id: 'u1', email: 'user@virtuo.local', recoveryCodeHash,
+      id: 'u1', email: 'user@virtuo.local', recoveryCodeHash, sessionVersion: 0,
     } as never);
 
     const res = await request(app)
@@ -154,22 +155,22 @@ describe('Auth Endpoints API Tests', () => {
 
     expect(res.status).toBe(200);
     expect(typeof res.body.resetToken).toBe('string');
-    const payload = jwt.verify(res.body.resetToken, TEST_JWT_SECRET) as { purpose: string };
+    const payload = verifyToken(res.body.resetToken) as { purpose: string };
     expect(payload.purpose).toBe('password-reset');
   });
 
   it('POST /api/auth/reset-password - Ndryshon fjalëkalimin me token rikuperimi', async () => {
-    vi.mocked(prisma.user.update).mockResolvedValue({ id: 'u1' } as never);
-    const resetToken = jwt.sign({ userId: 'u1', purpose: 'password-reset' }, TEST_JWT_SECRET, { expiresIn: '10m' });
+    vi.mocked(prisma.user.updateMany).mockResolvedValue({ count: 1 } as never);
+    const resetToken = signPasswordResetToken('u1', 0);
 
     const res = await request(app)
       .post('/api/auth/reset-password')
       .send({ resetToken, newPassword: 'PasswordiRi123!' });
 
     expect(res.status).toBe(200);
-    expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'u1' },
-      data: { passwordHash: expect.any(String) },
+    expect(prisma.user.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'u1', sessionVersion: 0 },
+      data: { passwordHash: expect.any(String), sessionVersion: { increment: 1 } },
     }));
   });
 });

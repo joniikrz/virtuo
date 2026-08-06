@@ -1,22 +1,26 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import prisma from '../prisma';
 import { authenticateToken, requireAdmin, AuthRequest } from '../middleware/auth';
 import { logActivity } from '../services/activity';
+import {
+  BCRYPT_ROUNDS,
+  clearSessionCookie,
+  cleanName,
+  passwordError,
+  RECOVERY_CODE_MAX_LENGTH,
+  RECOVERY_CODE_MIN_LENGTH,
+  setSessionCookie,
+  signPasswordResetToken,
+  signSessionToken,
+  validName,
+  verifyToken,
+} from '../security';
 
 const router = Router();
-const JWT_SECRET = process.env.JWT_SECRET;
-if (process.env.NODE_ENV === 'production' && !JWT_SECRET) {
-  throw new Error('JWT_SECRET duhet të vendoset në production');
-}
-if (!JWT_SECRET) {
-  console.warn('WARNING: JWT_SECRET is not set. Using a default key for development only.');
-}
-const JWT_SECRET_VALUE = JWT_SECRET || 'virtuo-dev-secret-do-not-use-in-production';
-
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const RECOVERY_CODE_MIN_LENGTH = 6;
+// Barazon afërsisht kohën e përgjigjes kur email-i nuk ekziston, pa ruajtur ndonjë sekret real.
+const DUMMY_BCRYPT_HASH = '$2a$12$cjgdfWrwg6sC61y2maoHR.If12dicf/GR9TMif4SAiYPLuonTud1y';
 
 function publicUser(user: any, roleName?: string) {
   return {
@@ -32,11 +36,11 @@ function publicUser(user: any, roleName?: string) {
 }
 
 function validRecoveryCode(value: unknown): value is string {
-  return typeof value === 'string' && value.length >= RECOVERY_CODE_MIN_LENGTH && value.length <= 64;
+  return typeof value === 'string' && value.length >= RECOVERY_CODE_MIN_LENGTH && value.length <= RECOVERY_CODE_MAX_LENGTH;
 }
 
 function normalizeEmail(value: unknown): string {
-  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return typeof value === 'string' ? value.trim().toLowerCase().slice(0, 255) : '';
 }
 
 /**
@@ -47,7 +51,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
   const { password } = req.body;
   const email = normalizeEmail(req.body.email);
 
-  if (!email || !password) {
+  if (!email || typeof password !== 'string' || !password || password.length > 128) {
     res.status(400).json({ error: 'Ju lutem shkruani email-in dhe fjalëkalimin' });
     return;
   }
@@ -63,26 +67,15 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       include: { role: true },
     });
 
-    if (!user) {
+    const isMatch = await bcrypt.compare(password, user?.passwordHash || DUMMY_BCRYPT_HASH);
+    if (!user || !isMatch) {
       res.status(401).json({ error: 'Email-i ose fjalëkalimi është i gabuar' });
       return;
     }
 
-    const isMatch = await bcrypt.compare(password, user.passwordHash);
-    if (!isMatch) {
-      res.status(401).json({ error: 'Email-i ose fjalëkalimi është i gabuar' });
-      return;
-    }
-
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET_VALUE, { expiresIn: '7d' });
+    const token = signSessionToken(user.id, user.sessionVersion);
     await logActivity(user.id, 'LOGIN', 'U kyç në llogari');
-
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    setSessionCookie(res, token);
 
     res.json({
       user: publicUser(user),
@@ -98,11 +91,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
  * Dalja nga sistemi (Logout)
  */
 router.post('/logout', (req: Request, res: Response): void => {
-  res.clearCookie('token', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-  });
+  clearSessionCookie(res);
   res.json({ message: 'U larguat me sukses' });
 });
 
@@ -155,7 +144,9 @@ router.get('/users', authenticateToken, async (_req: AuthRequest, res: Response)
  * Regjistrim publik për përdorues të rinj
  */
 router.post('/register', async (req: Request, res: Response): Promise<void> => {
-  const { password, firstName, lastName, recoveryCode } = req.body;
+  const { password, recoveryCode } = req.body;
+  const firstName = cleanName(req.body.firstName);
+  const lastName = cleanName(req.body.lastName);
   const email = normalizeEmail(req.body.email);
 
   if (!email || !password || !firstName || !lastName || !recoveryCode) {
@@ -168,13 +159,19 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  if (password.length < 6) {
-    res.status(400).json({ error: 'Fjalëkalimi duhet të ketë të paktën 6 karaktere' });
+  if (!validName(firstName) || !validName(lastName)) {
+    res.status(400).json({ error: 'Emri dhe mbiemri duhet të kenë 1 deri në 60 karaktere' });
+    return;
+  }
+
+  const invalidPassword = passwordError(password);
+  if (invalidPassword) {
+    res.status(400).json({ error: invalidPassword });
     return;
   }
 
   if (!validRecoveryCode(recoveryCode)) {
-    res.status(400).json({ error: 'Kodi i rikuperimit duhet të ketë 6 deri në 64 karaktere' });
+    res.status(400).json({ error: `Kodi i rikuperimit duhet të ketë ${RECOVERY_CODE_MIN_LENGTH} deri në ${RECOVERY_CODE_MAX_LENGTH} karaktere` });
     return;
   }
 
@@ -192,8 +189,8 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
     }
 
     const [passwordHash, recoveryCodeHash] = await Promise.all([
-      bcrypt.hash(password, 10),
-      bcrypt.hash(recoveryCode, 10),
+      bcrypt.hash(password, BCRYPT_ROUNDS),
+      bcrypt.hash(recoveryCode, BCRYPT_ROUNDS),
     ]);
     const newUser = await prisma.user.create({
       data: {
@@ -207,14 +204,8 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
       include: { role: true },
     });
 
-    const token = jwt.sign({ userId: newUser.id }, JWT_SECRET_VALUE, { expiresIn: '7d' });
-
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    const token = signSessionToken(newUser.id, newUser.sessionVersion);
+    setSessionCookie(res, token);
 
     res.status(201).json({
       message: 'Regjistrimi u krye me sukses',
@@ -231,7 +222,14 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
  * Krijon rolet dhe përdoruesin e parë Admin nëse nuk ekziston asnjë përdorues
  */
 router.post('/setup', async (req: Request, res: Response): Promise<void> => {
-  const { password, firstName, lastName, recoveryCode } = req.body;
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_INITIAL_SETUP !== 'true') {
+    res.status(404).json({ error: 'Endpoint-i nuk u gjet' });
+    return;
+  }
+
+  const { password, recoveryCode } = req.body;
+  const firstName = cleanName(req.body.firstName);
+  const lastName = cleanName(req.body.lastName);
   const email = normalizeEmail(req.body.email);
 
   if (!email || !password || !firstName || !lastName || !recoveryCode) {
@@ -244,13 +242,19 @@ router.post('/setup', async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  if (password.length < 6) {
-    res.status(400).json({ error: 'Fjalëkalimi duhet të ketë të paktën 6 karaktere' });
+  if (!validName(firstName) || !validName(lastName)) {
+    res.status(400).json({ error: 'Emri dhe mbiemri duhet të kenë 1 deri në 60 karaktere' });
+    return;
+  }
+
+  const invalidPassword = passwordError(password);
+  if (invalidPassword) {
+    res.status(400).json({ error: invalidPassword });
     return;
   }
 
   if (!validRecoveryCode(recoveryCode)) {
-    res.status(400).json({ error: 'Kodi i rikuperimit duhet të ketë 6 deri në 64 karaktere' });
+    res.status(400).json({ error: `Kodi i rikuperimit duhet të ketë ${RECOVERY_CODE_MIN_LENGTH} deri në ${RECOVERY_CODE_MAX_LENGTH} karaktere` });
     return;
   }
 
@@ -274,8 +278,8 @@ router.post('/setup', async (req: Request, res: Response): Promise<void> => {
     });
 
     const [passwordHash, recoveryCodeHash] = await Promise.all([
-      bcrypt.hash(password, 10),
-      bcrypt.hash(recoveryCode, 10),
+      bcrypt.hash(password, BCRYPT_ROUNDS),
+      bcrypt.hash(recoveryCode, BCRYPT_ROUNDS),
     ]);
     const initialAdmin = await prisma.user.create({
       data: {
@@ -289,14 +293,8 @@ router.post('/setup', async (req: Request, res: Response): Promise<void> => {
       include: { role: true },
     });
 
-    const token = jwt.sign({ userId: initialAdmin.id }, JWT_SECRET_VALUE, { expiresIn: '7d' });
-
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    const token = signSessionToken(initialAdmin.id, initialAdmin.sessionVersion);
+    setSessionCookie(res, token);
 
     res.status(201).json({
       message: 'Sistemi u inicializua me sukses',
@@ -313,7 +311,9 @@ router.post('/setup', async (req: Request, res: Response): Promise<void> => {
  * Krijimi i një përdoruesi të ri nga Admin-i
  */
 router.post('/register-user', authenticateToken, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
-  const { password, firstName, lastName, roleName, recoveryCode } = req.body;
+  const { password, roleName, recoveryCode } = req.body;
+  const firstName = cleanName(req.body.firstName);
+  const lastName = cleanName(req.body.lastName);
   const email = normalizeEmail(req.body.email);
 
   if (!email || !password || !firstName || !lastName || !roleName || !recoveryCode) {
@@ -326,13 +326,19 @@ router.post('/register-user', authenticateToken, requireAdmin, async (req: AuthR
     return;
   }
 
-  if (password.length < 6) {
-    res.status(400).json({ error: 'Fjalëkalimi duhet të ketë të paktën 6 karaktere' });
+  if (!validName(firstName) || !validName(lastName)) {
+    res.status(400).json({ error: 'Emri dhe mbiemri duhet të kenë 1 deri në 60 karaktere' });
+    return;
+  }
+
+  const invalidPassword = passwordError(password);
+  if (invalidPassword) {
+    res.status(400).json({ error: invalidPassword });
     return;
   }
 
   if (!validRecoveryCode(recoveryCode)) {
-    res.status(400).json({ error: 'Kodi i rikuperimit duhet të ketë 6 deri në 64 karaktere' });
+    res.status(400).json({ error: `Kodi i rikuperimit duhet të ketë ${RECOVERY_CODE_MIN_LENGTH} deri në ${RECOVERY_CODE_MAX_LENGTH} karaktere` });
     return;
   }
 
@@ -355,8 +361,8 @@ router.post('/register-user', authenticateToken, requireAdmin, async (req: AuthR
     }
 
     const [passwordHash, recoveryCodeHash] = await Promise.all([
-      bcrypt.hash(password, 10),
-      bcrypt.hash(recoveryCode, 10),
+      bcrypt.hash(password, BCRYPT_ROUNDS),
+      bcrypt.hash(recoveryCode, BCRYPT_ROUNDS),
     ]);
     const newUser = await prisma.user.create({
       data: {
@@ -398,8 +404,9 @@ router.put('/change-password', authenticateToken, async (req: AuthRequest, res: 
     return;
   }
 
-  if (newPassword.length < 6) {
-    res.status(400).json({ error: 'Fjalëkalimi i ri duhet të ketë të paktën 6 karaktere' });
+  const invalidPassword = passwordError(newPassword);
+  if (invalidPassword) {
+    res.status(400).json({ error: invalidPassword });
     return;
   }
 
@@ -421,11 +428,14 @@ router.put('/change-password', authenticateToken, async (req: AuthRequest, res: 
       return;
     }
 
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    const nextSessionVersion = (user.sessionVersion ?? 0) + 1;
     await prisma.user.update({
       where: { id: userId },
-      data: { passwordHash },
+      data: { passwordHash, sessionVersion: nextSessionVersion },
     });
+
+    setSessionCookie(res, signSessionToken(userId, nextSessionVersion));
 
     await logActivity(userId, 'PASSWORD_CHANGED', 'Ndryshoi fjalëkalimin');
 
@@ -438,25 +448,33 @@ router.put('/change-password', authenticateToken, async (req: AuthRequest, res: 
 
 router.put('/profile', authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
-  const firstName = typeof req.body.firstName === 'string' ? req.body.firstName.trim() : '';
-  const lastName = typeof req.body.lastName === 'string' ? req.body.lastName.trim() : '';
+  const firstName = cleanName(req.body.firstName);
+  const lastName = cleanName(req.body.lastName);
   const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  const currentPassword = req.body.currentPassword;
 
   if (!userId) {
     res.status(401).json({ error: 'I paautorizuar' });
     return;
   }
-  if (!firstName || !lastName || !email) {
-    res.status(400).json({ error: 'Emri, mbiemri dhe email-i janë të detyrueshëm' });
+  if (!firstName || !lastName || !email || typeof currentPassword !== 'string') {
+    res.status(400).json({ error: 'Emri, mbiemri, email-i dhe fjalëkalimi aktual janë të detyrueshëm' });
     return;
   }
-  if (firstName.length > 60 || lastName.length > 60 || !EMAIL_REGEX.test(email)) {
+  if (!validName(firstName) || !validName(lastName) || email.length > 254 || !EMAIL_REGEX.test(email)) {
     res.status(400).json({ error: 'Të dhënat e profilit nuk janë të vlefshme' });
     return;
   }
 
   try {
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const [currentUser, existing] = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId } }),
+      prisma.user.findUnique({ where: { email } }),
+    ]);
+    if (!currentUser || !(await bcrypt.compare(currentPassword, currentUser.passwordHash))) {
+      res.status(400).json({ error: 'Fjalëkalimi aktual është i gabuar' });
+      return;
+    }
     if (existing && existing.id !== userId) {
       res.status(409).json({ error: 'Ky email përdoret nga një llogari tjetër' });
       return;
@@ -530,7 +548,7 @@ router.put('/recovery-code', authenticateToken, async (req: AuthRequest, res: Re
     return;
   }
   if (typeof currentPassword !== 'string' || !validRecoveryCode(recoveryCode)) {
-    res.status(400).json({ error: 'Shkruani fjalëkalimin aktual dhe një kod rikuperimi me 6 deri në 64 karaktere' });
+    res.status(400).json({ error: `Shkruani fjalëkalimin aktual dhe një kod rikuperimi me ${RECOVERY_CODE_MIN_LENGTH} deri në ${RECOVERY_CODE_MAX_LENGTH} karaktere` });
     return;
   }
 
@@ -540,7 +558,7 @@ router.put('/recovery-code', authenticateToken, async (req: AuthRequest, res: Re
       res.status(400).json({ error: 'Fjalëkalimi aktual është i gabuar' });
       return;
     }
-    const recoveryCodeHash = await bcrypt.hash(recoveryCode, 10);
+    const recoveryCodeHash = await bcrypt.hash(recoveryCode, BCRYPT_ROUNDS);
     await prisma.user.update({ where: { id: userId }, data: { recoveryCodeHash } });
     await logActivity(userId, 'RECOVERY_CODE_UPDATED', 'Ndryshoi kodin e rikuperimit');
     res.json({ message: 'Kodi i rikuperimit u ruajt me sukses', hasRecoveryCode: true });
@@ -560,18 +578,12 @@ router.post('/forgot-password/verify', async (req: Request, res: Response): Prom
 
   try {
     const user = await prisma.user.findUnique({ where: { email } });
-    const matches = user?.recoveryCodeHash
-      ? await bcrypt.compare(recoveryCode, user.recoveryCodeHash)
-      : false;
+    const matches = await bcrypt.compare(recoveryCode, user?.recoveryCodeHash || DUMMY_BCRYPT_HASH);
     if (!user || !matches) {
       res.status(400).json({ error: 'Email-i ose kodi i rikuperimit nuk është i saktë' });
       return;
     }
-    const resetToken = jwt.sign(
-      { userId: user.id, purpose: 'password-reset' },
-      JWT_SECRET_VALUE,
-      { expiresIn: '10m' }
-    );
+    const resetToken = signPasswordResetToken(user.id, user.sessionVersion);
     res.json({ resetToken });
   } catch (error) {
     console.error('Forgot password verification error:', error);
@@ -581,19 +593,27 @@ router.post('/forgot-password/verify', async (req: Request, res: Response): Prom
 
 router.post('/reset-password', async (req: Request, res: Response): Promise<void> => {
   const { resetToken, newPassword } = req.body;
-  if (typeof resetToken !== 'string' || typeof newPassword !== 'string' || newPassword.length < 6) {
-    res.status(400).json({ error: 'Token-i dhe fjalëkalimi i ri me së paku 6 karaktere janë të detyrueshëm' });
+  const invalidPassword = passwordError(newPassword);
+  if (typeof resetToken !== 'string' || invalidPassword) {
+    res.status(400).json({ error: invalidPassword || 'Token-i i rikuperimit është i detyrueshëm' });
     return;
   }
 
   try {
-    const payload = jwt.verify(resetToken, JWT_SECRET_VALUE) as { userId?: string; purpose?: string };
-    if (!payload.userId || payload.purpose !== 'password-reset') {
+    const payload = verifyToken(resetToken) as { userId?: string; purpose?: string; sessionVersion?: number };
+    if (!payload.userId || payload.purpose !== 'password-reset' || typeof payload.sessionVersion !== 'number') {
       res.status(400).json({ error: 'Kërkesa për rikuperim nuk është e vlefshme' });
       return;
     }
-    const passwordHash = await bcrypt.hash(newPassword, 10);
-    await prisma.user.update({ where: { id: payload.userId }, data: { passwordHash } });
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    const updated = await prisma.user.updateMany({
+      where: { id: payload.userId, sessionVersion: payload.sessionVersion },
+      data: { passwordHash, sessionVersion: { increment: 1 } },
+    });
+    if (updated.count !== 1) {
+      res.status(400).json({ error: 'Ky token rikuperimi është përdorur ose ka skaduar' });
+      return;
+    }
     await logActivity(payload.userId, 'PASSWORD_RESET', 'Rivendosi fjalëkalimin me kodin e rikuperimit');
     res.json({ message: 'Fjalëkalimi u rivendos. Tani mund të kyçeni.' });
   } catch (error) {

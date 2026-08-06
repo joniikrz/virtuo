@@ -44,6 +44,7 @@ export default function SettingsPanel({ user, isOpen, initialTab = 'account', on
   const [firstName, setFirstName] = useState(user.firstName);
   const [lastName, setLastName] = useState(user.lastName);
   const [email, setEmail] = useState(user.email);
+  const [profilePassword, setProfilePassword] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -64,6 +65,12 @@ export default function SettingsPanel({ user, isOpen, initialTab = 'account', on
     setEmail(user.email);
     setEmailNotifications(user.emailNotifications ?? true);
     setInAppNotifications(user.inAppNotifications ?? true);
+    setProfilePassword('');
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setRecoveryPassword('');
+    setRecoveryCode('');
     setMessage(null);
   }, [isOpen, initialTab, user]);
 
@@ -100,8 +107,9 @@ export default function SettingsPanel({ user, isOpen, initialTab = 'account', on
   const saveProfile = (event: React.FormEvent) => {
     event.preventDefault();
     void runSave(async () => {
-      const data = await apiRequest<{ user: User; message?: string }>('/api/auth/profile', 'PUT', { firstName, lastName, email });
+      const data = await apiRequest<{ user: User; message?: string }>('/api/auth/profile', 'PUT', { firstName, lastName, email, currentPassword: profilePassword });
       onUserUpdate(data.user);
+      setProfilePassword('');
       setMessage({ type: 'success', text: data.message || 'Profili u ruajt.' });
     });
   };
@@ -168,6 +176,7 @@ export default function SettingsPanel({ user, isOpen, initialTab = 'account', on
                 <label>Mbiemri<input className="input-field" value={lastName} onChange={(e) => setLastName(e.target.value)} maxLength={60} required /></label>
               </div>
               <label>Email<input type="email" className="input-field" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
+              <label>Fjalëkalimi aktual<input type="password" className="input-field" value={profilePassword} onChange={(e) => setProfilePassword(e.target.value)} maxLength={128} autoComplete="current-password" required /></label>
               <button className="btn btn-primary settings-save" disabled={saving}><Save size={17} /> Ruaj profilin</button>
             </form>
           )}
@@ -176,17 +185,17 @@ export default function SettingsPanel({ user, isOpen, initialTab = 'account', on
             <div className="settings-stack">
               {!user.hasRecoveryCode && <div className="settings-message warning">Kjo llogari ende nuk ka kod rikuperimi. Vendose më poshtë që të mund ta rikthesh fjalëkalimin.</div>}
               <form className="settings-form settings-card" onSubmit={savePassword}>
-                <div className="settings-section-heading"><h3>Ndrysho fjalëkalimin</h3><p>Përdor të paktën 6 karaktere.</p></div>
-                <label>Fjalëkalimi aktual<input type="password" className="input-field" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} autoComplete="current-password" required /></label>
-                <label>Fjalëkalimi i ri<input type="password" className="input-field" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} minLength={6} autoComplete="new-password" required /></label>
-                <label>Përsërit fjalëkalimin<input type="password" className="input-field" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} minLength={6} autoComplete="new-password" required /></label>
+                <div className="settings-section-heading"><h3>Ndrysho fjalëkalimin</h3><p>Përdor 12–128 karaktere dhe shmang fjalëkalimet e zakonshme.</p></div>
+                <label>Fjalëkalimi aktual<input type="password" className="input-field" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} maxLength={128} autoComplete="current-password" required /></label>
+                <label>Fjalëkalimi i ri<input type="password" className="input-field" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} minLength={12} maxLength={128} autoComplete="new-password" required /></label>
+                <label>Përsërit fjalëkalimin<input type="password" className="input-field" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} minLength={12} maxLength={128} autoComplete="new-password" required /></label>
                 <button className="btn btn-primary settings-save" disabled={saving}><Lock size={17} /> Ndrysho fjalëkalimin</button>
               </form>
 
               <form className="settings-form settings-card" onSubmit={saveRecoveryCode}>
                 <div className="settings-section-heading"><h3>Kodi i rikuperimit</h3><p>Ruaje privatisht. Përdoret kur harron fjalëkalimin dhe nuk ruhet si tekst i lexueshëm.</p></div>
                 <label>Fjalëkalimi aktual<input type="password" className="input-field" value={recoveryPassword} onChange={(e) => setRecoveryPassword(e.target.value)} required /></label>
-                <label>Kodi i ri<input type="password" className="input-field" value={recoveryCode} onChange={(e) => setRecoveryCode(e.target.value)} minLength={6} maxLength={64} placeholder="Së paku 6 karaktere" required /></label>
+                <label>Kodi i ri<input type="password" className="input-field" value={recoveryCode} onChange={(e) => setRecoveryCode(e.target.value)} minLength={10} maxLength={64} placeholder="10–64 karaktere" required /></label>
                 <button className="btn btn-secondary settings-save" disabled={saving}><KeyRound size={17} /> Ruaj kodin</button>
               </form>
             </div>

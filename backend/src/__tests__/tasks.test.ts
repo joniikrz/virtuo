@@ -1,10 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
-import jwt from 'jsonwebtoken';
 import { app } from '../index';
 import prisma from '../prisma';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
+import { signSessionToken } from '../security';
 
 vi.mock('../prisma', () => ({
   default: {
@@ -57,7 +55,7 @@ describe('Tasks API Tests', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockToken = jwt.sign({ userId: 'test-user-id' }, JWT_SECRET, { expiresIn: '1h' });
+    mockToken = signSessionToken('test-user-id', 0);
 
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
       id: 'test-user-id',
@@ -65,6 +63,7 @@ describe('Tasks API Tests', () => {
       firstName: 'Test',
       lastName: 'User',
       roleId: 'user-role-id',
+      sessionVersion: 0,
       role: { name: 'USER' },
     } as never);
   });

@@ -125,31 +125,31 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         <form onSubmit={handleSubmit} className="auth-form">
           {isRegister && (
             <div className="form-row">
-              <div className="form-group"><label htmlFor="firstName">Emri</label><input id="firstName" className="input-field" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Filan" autoComplete="given-name" required /></div>
-              <div className="form-group"><label htmlFor="lastName">Mbiemri</label><input id="lastName" className="input-field" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Fisteku" autoComplete="family-name" required /></div>
+              <div className="form-group"><label htmlFor="firstName">Emri</label><input id="firstName" className="input-field" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Filan" autoComplete="given-name" maxLength={60} required /></div>
+              <div className="form-group"><label htmlFor="lastName">Mbiemri</label><input id="lastName" className="input-field" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Fisteku" autoComplete="family-name" maxLength={60} required /></div>
             </div>
           )}
 
           {mode !== 'reset' && (
-            <div className="form-group"><label htmlFor="email">Email</label><input type="email" id="email" className="input-field" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="emri@kompania.com" autoComplete="email" required /></div>
+            <div className="form-group"><label htmlFor="email">Email</label><input type="email" id="email" className="input-field" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="emri@kompania.com" autoComplete="email" maxLength={254} required /></div>
           )}
 
           {(mode === 'login' || mode === 'register' || mode === 'reset') && (
             <div className="form-group">
-              <div className="form-label-row"><label htmlFor="password">{mode === 'reset' ? 'Fjalëkalimi i ri' : 'Fjalëkalimi'}</label>{(isRegister || mode === 'reset') && <span>Minimumi 6 karaktere</span>}</div>
+              <div className="form-label-row"><label htmlFor="password">{mode === 'reset' ? 'Fjalëkalimi i ri' : 'Fjalëkalimi'}</label>{(isRegister || mode === 'reset') && <span>12–128 karaktere</span>}</div>
               <div className="password-field">
-                <input type={showPassword ? 'text' : 'password'} id="password" className="input-field" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Vendos fjalëkalimin" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={mode === 'login' ? undefined : 6} required />
+                <input type={showPassword ? 'text' : 'password'} id="password" className="input-field" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Vendos fjalëkalimin" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={mode === 'login' ? undefined : 12} maxLength={128} required />
                 <button type="button" className="password-toggle" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? 'Fshih fjalëkalimin' : 'Shfaq fjalëkalimin'}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
               </div>
             </div>
           )}
 
-          {(isRegister || mode === 'reset') && <div className="form-group"><label htmlFor="confirmPassword">Përsërit fjalëkalimin</label><input type={showPassword ? 'text' : 'password'} id="confirmPassword" className="input-field" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Përsërit fjalëkalimin" autoComplete="new-password" minLength={6} required /></div>}
+          {(isRegister || mode === 'reset') && <div className="form-group"><label htmlFor="confirmPassword">Përsërit fjalëkalimin</label><input type={showPassword ? 'text' : 'password'} id="confirmPassword" className="input-field" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Përsërit fjalëkalimin" autoComplete="new-password" minLength={12} maxLength={128} required /></div>}
 
           {(isRegister || mode === 'forgot') && (
             <div className="form-group">
-              <div className="form-label-row"><label htmlFor="recoveryCode">Kodi i rikuperimit</label><span>6–64 karaktere</span></div>
-              <input type="password" id="recoveryCode" className="input-field" value={recoveryCode} onChange={(e) => setRecoveryCode(e.target.value)} placeholder={isRegister ? 'Zgjidh një kod që e mban mend' : 'Shkruaj kodin e vendosur në regjistrim'} minLength={6} maxLength={64} autoComplete="off" required />
+              <div className="form-label-row"><label htmlFor="recoveryCode">Kodi i rikuperimit</label><span>10–64 karaktere</span></div>
+              <input type="password" id="recoveryCode" className="input-field" value={recoveryCode} onChange={(e) => setRecoveryCode(e.target.value)} placeholder={isRegister ? 'Zgjidh një kod që e mban mend' : 'Shkruaj kodin e vendosur në regjistrim'} minLength={10} maxLength={64} autoComplete="off" required />
               {isRegister && <small className="field-help">Ruaje privatisht: ky kod të lejon të krijosh fjalëkalim të ri nëse e harron.</small>}
             </div>
           )}

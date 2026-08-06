@@ -12,14 +12,64 @@ const uploadDirectory = path.resolve(process.env.UPLOAD_DIR || 'uploads');
 const validStatuses = new Set(['TODO', 'IN_PROGRESS', 'COMPLETED']);
 const validPriorities = new Set(['LOW', 'NORMAL', 'HIGH', 'URGENT']);
 const taskListLimit = Math.max(50, Math.min(Number(process.env.TASK_LIST_LIMIT) || 500, 2000));
+const maxUploadBytes = Math.max(1024, Math.min(Number(process.env.MAX_UPLOAD_BYTES) || 10 * 1024 * 1024, 25 * 1024 * 1024));
 fs.mkdirSync(uploadDirectory, { recursive: true });
+
+const uploadMimeByExtension: Record<string, string> = {
+  '.pdf': 'application/pdf', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
+  '.txt': 'text/plain', '.csv': 'text/csv', '.zip': 'application/zip',
+  '.doc': 'application/msword', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xls': 'application/vnd.ms-excel', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.ppt': 'application/vnd.ms-powerpoint', '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+};
+
+function safeFileName(value: string): string {
+  return path.basename(value).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 180) || 'skedar';
+}
+
+function uploadValidationError(message: string): Error {
+  const error = new Error(message);
+  error.name = 'UploadValidationError';
+  return error;
+}
+
+async function validStoredFile(file: Express.Multer.File): Promise<boolean> {
+  const extension = path.extname(file.originalname).toLowerCase();
+  const handle = await fs.promises.open(file.path, 'r');
+  let data: Buffer;
+  try {
+    const header = Buffer.alloc(4096);
+    const { bytesRead } = await handle.read(header, 0, header.length, 0);
+    data = header.subarray(0, bytesRead);
+  } finally {
+    await handle.close();
+  }
+  if (data.length === 0) return false;
+  const starts = (...bytes: number[]) => bytes.every((byte, index) => data[index] === byte);
+  if (extension === '.pdf') return data.subarray(0, 5).toString() === '%PDF-';
+  if (extension === '.png') return starts(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
+  if (extension === '.jpg' || extension === '.jpeg') return starts(0xff, 0xd8, 0xff);
+  if (extension === '.webp') return data.subarray(0, 4).toString() === 'RIFF' && data.subarray(8, 12).toString() === 'WEBP';
+  if (['.zip', '.docx', '.xlsx', '.pptx'].includes(extension)) return starts(0x50, 0x4b, 0x03, 0x04) || starts(0x50, 0x4b, 0x05, 0x06);
+  if (['.doc', '.xls', '.ppt'].includes(extension)) return starts(0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1);
+  if (extension === '.txt' || extension === '.csv') return !data.subarray(0, Math.min(data.length, 4096)).includes(0);
+  return false;
+}
 
 const upload = multer({
   storage: multer.diskStorage({
     destination: uploadDirectory,
     filename: (_req, file, done) => done(null, `${crypto.randomUUID()}${path.extname(file.originalname)}`),
   }),
-  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, done) => {
+    const extension = path.extname(file.originalname).toLowerCase();
+    if (!uploadMimeByExtension[extension]) {
+      done(uploadValidationError('Ky lloj skedari nuk lejohet'));
+      return;
+    }
+    done(null, true);
+  },
+  limits: { fileSize: maxUploadBytes, files: 1, fields: 5, fieldNameSize: 100, fieldSize: 1024 },
 });
 
 const taskInclude = {
@@ -55,7 +105,7 @@ function validDate(value: unknown): Date | null {
 
 function parseAssignedUserIds(multipleValue: unknown, legacyValue: unknown): string[] {
   const candidates: unknown[] = Array.isArray(multipleValue) ? multipleValue : [legacyValue];
-  return [...new Set(candidates.filter((id): id is string => typeof id === 'string' && id.length > 0))];
+  return [...new Set(candidates.filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= 100))];
 }
 
 async function spaceAccess(spaceId: string, userId: string) {
@@ -217,10 +267,14 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
 router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   const spaceId = req.params.spaceId || req.body.spaceId;
-  const { title, description, status = 'TODO', priority = 'NORMAL', deadline } = req.body;
+  const title = typeof req.body.title === 'string' ? req.body.title.trim() : '';
+  const description = typeof req.body.description === 'string' ? req.body.description.trim() : '';
+  const { status = 'TODO', priority = 'NORMAL', deadline } = req.body;
   const assignedToIds = parseAssignedUserIds(req.body.assignedToIds, req.body.assignedToId);
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
-  if (typeof title !== 'string' || !title.trim() || typeof spaceId !== 'string' || assignedToIds.length === 0) return res.status(400).json({ error: 'Titulli, hapësira dhe së paku një person i caktuar janë të detyrueshëm' });
+  if (!title || typeof spaceId !== 'string' || assignedToIds.length === 0) return res.status(400).json({ error: 'Titulli, hapësira dhe së paku një person i caktuar janë të detyrueshëm' });
+  if (title.length > 160 || description.length > 10_000) return res.status(400).json({ error: 'Titulli ose përshkrimi është shumë i gjatë' });
+  if (assignedToIds.length > 100) return res.status(400).json({ error: 'Një detyrë mund t’u caktohet maksimumi 100 anëtarëve' });
   const parsedDeadline = validDate(deadline);
   if (!parsedDeadline) return res.status(400).json({ error: 'Afati i fundit nuk është i vlefshëm' });
   if (!validStatuses.has(status) || !validPriorities.has(priority)) return res.status(400).json({ error: 'Statusi ose prioriteti nuk është i vlefshëm' });
@@ -231,7 +285,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
     if (memberCount !== assignedToIds.length) return res.status(400).json({ error: 'Të gjithë personat e caktuar duhet të jenë anëtarë të hapësirës' });
     const task = await prisma.task.create({
       data: {
-        title: title.trim(), description, status, priority, deadline: parsedDeadline, spaceId, createdById: userId,
+        title, description, status, priority, deadline: parsedDeadline, spaceId, createdById: userId,
         assignedToId: assignedToIds[0],
         assignees: { create: assignedToIds.map((assignedUserId) => ({ userId: assignedUserId })) },
       },
@@ -260,14 +314,19 @@ router.post('/:id/attachments', authenticateToken, upload.single('file'), async 
   const userId = req.user?.id;
   if (!userId || !req.file) return res.status(400).json({ error: 'Skedari është i detyrueshëm' });
   try {
+    if (!(await validStoredFile(req.file))) {
+      await fs.promises.unlink(req.file.path).catch(() => undefined);
+      return res.status(400).json({ error: 'Përmbajtja e skedarit nuk përputhet me formatin e lejuar' });
+    }
     const access = await taskAccess(req.params.id, userId);
     if (!access.task || !access.canView) {
       await fs.promises.unlink(req.file.path).catch(() => undefined);
       if (!access.task) return res.status(404).json({ error: 'Detyra nuk u gjet' });
       return res.status(403).json({ error: 'Nuk keni leje të ngarkoni skedarë' });
     }
+    const extension = path.extname(req.file.originalname).toLowerCase();
     const attachment = await prisma.attachment.create({
-      data: { taskId: access.task.id, fileName: req.file.originalname, filePath: req.file.path, fileSize: req.file.size, mimeType: req.file.mimetype, uploadedById: userId },
+      data: { taskId: access.task.id, fileName: safeFileName(req.file.originalname), filePath: req.file.path, fileSize: req.file.size, mimeType: uploadMimeByExtension[extension], uploadedById: userId },
       select: { id: true, fileName: true, fileSize: true, mimeType: true, uploadedById: true, uploadedAt: true },
     });
     await prisma.task.update({ where: { id: access.task.id }, data: { updatedAt: new Date() } });
@@ -290,6 +349,8 @@ router.get('/:id/attachments/:attachmentId', authenticateToken, async (req: Auth
   if (!access.task || !access.canView) return res.status(404).json({ error: 'Skedari nuk u gjet' });
   const attachment = await prisma.attachment.findFirst({ where: { id: req.params.attachmentId, taskId: access.task.id } });
   if (!attachment) return res.status(404).json({ error: 'Skedari nuk u gjet' });
+  res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+  res.setHeader('X-Content-Type-Options', 'nosniff');
   return res.download(attachment.filePath, attachment.fileName);
 });
 
@@ -375,8 +436,13 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
   const { title, description, status, priority, deadline } = req.body;
   const hasAssignmentUpdate = Array.isArray(req.body.assignedToIds) || req.body.assignedToId !== undefined;
   const assignedToIds = parseAssignedUserIds(req.body.assignedToIds, req.body.assignedToId);
+  const normalizedTitle = typeof title === 'string' ? title.trim() : undefined;
+  const normalizedDescription = typeof description === 'string' ? description.trim() : undefined;
   if (status !== undefined && !validStatuses.has(status) || priority !== undefined && !validPriorities.has(priority)) return res.status(400).json({ error: 'Statusi ose prioriteti nuk është i vlefshëm' });
   if (hasAssignmentUpdate && assignedToIds.length === 0) return res.status(400).json({ error: 'Së paku një person i caktuar është i detyrueshëm' });
+  if (hasAssignmentUpdate && assignedToIds.length > 100) return res.status(400).json({ error: 'Një detyrë mund t’u caktohet maksimumi 100 anëtarëve' });
+  if (title !== undefined && (!normalizedTitle || normalizedTitle.length > 160)) return res.status(400).json({ error: 'Titulli duhet të ketë 1 deri në 160 karaktere' });
+  if (description !== undefined && (normalizedDescription === undefined || normalizedDescription.length > 10_000)) return res.status(400).json({ error: 'Përshkrimi mund të ketë maksimumi 10000 karaktere' });
   const parsedDeadline = deadline === undefined ? undefined : validDate(deadline);
   if (deadline !== undefined && !parsedDeadline) return res.status(400).json({ error: 'Afati i fundit nuk është i vlefshëm' });
   try {
@@ -394,8 +460,8 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
     const updated = await prisma.task.update({
       where: { id: access.task.id },
       data: {
-        ...(typeof title === 'string' && { title: title.trim() }),
-        ...(description !== undefined && { description }),
+        ...(normalizedTitle !== undefined && { title: normalizedTitle }),
+        ...(normalizedDescription !== undefined && { description: normalizedDescription }),
         ...(status !== undefined && { status }),
         ...(priority !== undefined && { priority }),
         ...(parsedDeadline && { deadline: parsedDeadline }),

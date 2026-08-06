@@ -9,14 +9,27 @@ x-backend-environment: &backend-environment
   PORT: 5000
   DATABASE_URL: "postgresql://virtuo:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/virtuo?schema=public&connection_limit=${DB_CONNECTION_LIMIT:-10}&pool_timeout=${DB_POOL_TIMEOUT:-10}&connect_timeout=5"
   JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+  BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+  COOKIE_SECURE: ${COOKIE_SECURE:-true}
+  ALLOW_INITIAL_SETUP: ${ALLOW_INITIAL_SETUP:-false}
   ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@virtuo.local}
   ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
   FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
   UPLOAD_DIR: /app/uploads
   TASK_LIST_LIMIT: ${TASK_LIST_LIMIT:-500}
   REQUEST_TIMEOUT_MS: ${REQUEST_TIMEOUT_MS:-30000}
+  MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-10485760}
+  JSON_BODY_LIMIT: ${JSON_BODY_LIMIT:-1mb}
   DB_TRANSACTION_MAX_WAIT_MS: ${DB_TRANSACTION_MAX_WAIT_MS:-5000}
   DB_TRANSACTION_TIMEOUT_MS: ${DB_TRANSACTION_TIMEOUT_MS:-15000}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_SECURE: ${SMTP_SECURE:-false}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASS: ${SMTP_PASS:-}
+  SMTP_FROM: ${SMTP_FROM:-}
+  SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:-true}
+  SMTP_TLS_REJECT_UNAUTHORIZED: ${SMTP_TLS_REJECT_UNAUTHORIZED:-true}
 
 services:
   db:
@@ -58,7 +71,10 @@ services:
     stop_grace_period: 30s
 
   migrate:
-    <<: *backend-image
+    image: virtuo-migrate:local
+    build:
+      context: ./backend
+      target: migrator
     restart: "no"
     environment: *backend-environment
     command: ["sh", "-c", "./node_modules/.bin/prisma db push --skip-generate && node dist/bootstrap.js"]
@@ -67,6 +83,10 @@ services:
         condition: service_healthy
     networks:
       - private
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
   backend:
     <<: *backend-image
@@ -78,6 +98,13 @@ services:
         condition: service_completed_successfully
     volumes:
       - uploads_data:/app/uploads
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     expose:
       - "5000"
     networks:
@@ -102,6 +129,13 @@ services:
     networks:
       - public
       - private
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=32m,nosuid,nodev
+      - /var/run:size=8m,nosuid,nodev
+      - /tmp:size=16m,noexec,nosuid,nodev
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/health/live || exit 1"]
       interval: 15s

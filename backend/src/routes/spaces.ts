@@ -6,6 +6,8 @@ import { authenticateToken, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 const uploadDirectory = path.resolve(process.env.UPLOAD_DIR || 'uploads');
+const spaceColors = new Set(['#0079BF', '#D29034', '#519839', '#B04632', '#89609E', '#CD5A91', '#4BBF6B', '#00AEEF', '#838C91']);
+const maxSpaceMembers = 250;
 
 async function removeStoredFiles(filePaths: string[]) {
   await Promise.all(filePaths.map(async (filePath) => {
@@ -99,22 +101,26 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
  * Krijimi i një Space të ri me Transaction
  */
 router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
-  const { name, color, memberIds } = req.body;
+  const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
+  const { color, memberIds } = req.body;
   const creatorId = req.user?.id;
 
-  if (!name) {
-    return res.status(400).json({ error: 'Emri i hapësirës është i detyrueshëm' });
+  if (!name || name.length > 100) {
+    return res.status(400).json({ error: 'Emri i hapësirës duhet të ketë 1 deri në 100 karaktere' });
   }
 
   if (!creatorId) {
     return res.status(401).json({ error: 'I paautorizuar' });
   }
 
-  const boardColors = ['#0079BF', '#D29034', '#519839', '#B04632', '#89609E', '#CD5A91', '#4BBF6B', '#00AEEF', '#838C91'];
-  const spaceColor = boardColors.includes(color) ? color : '#0079BF';
+  const spaceColor = typeof color === 'string' && spaceColors.has(color) ? color : '#0079BF';
   const requestedMemberIds = Array.isArray(memberIds)
-    ? [...new Set(memberIds.filter((id): id is string => typeof id === 'string' && id.length > 0))]
+    ? [...new Set(memberIds.filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= 100))]
     : [];
+  const allMemberIds = [...new Set([creatorId, ...requestedMemberIds])];
+  if (allMemberIds.length > maxSpaceMembers) {
+    return res.status(400).json({ error: `Një hapësirë mund të krijohet me maksimumi ${maxSpaceMembers} anëtarë` });
+  }
 
   try {
     if (requestedMemberIds.length) {
@@ -134,7 +140,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       });
 
       await tx.spaceMember.createMany({
-        data: [...new Set([creatorId, ...requestedMemberIds])].map((userId) => ({ spaceId: newSpace.id, userId })),
+        data: allMemberIds.map((userId) => ({ spaceId: newSpace.id, userId })),
       });
 
       return tx.space.findUnique({
@@ -158,7 +164,7 @@ router.post('/:id/members', authenticateToken, async (req: AuthRequest, res: Res
   const spaceId = req.params.id;
   const { userId } = req.body;
   const currentUserId = req.user?.id;
-  if (!userId) {
+  if (typeof userId !== 'string' || !userId || userId.length > 100) {
     return res.status(400).json({ error: 'ID e përdoruesit është e detyrueshme' });
   }
 
@@ -190,6 +196,11 @@ router.post('/:id/members', authenticateToken, async (req: AuthRequest, res: Res
 
     if (existingMember) {
       return res.status(400).json({ error: 'Përdoruesi është tashmë anëtar i kësaj hapësire' });
+    }
+
+    const memberCount = await prisma.spaceMember.count({ where: { spaceId } });
+    if (memberCount >= maxSpaceMembers) {
+      return res.status(400).json({ error: `Hapësira mund të ketë maksimumi ${maxSpaceMembers} anëtarë` });
     }
 
     const member = await prisma.spaceMember.create({
@@ -308,8 +319,15 @@ router.delete('/:id/members/:userId', authenticateToken, async (req: AuthRequest
  */
 router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
   const spaceId = req.params.id;
-  const { name, color } = req.body;
+  const name = typeof req.body.name === 'string' ? req.body.name.trim() : undefined;
+  const { color } = req.body;
   const userId = req.user?.id;
+  if (name !== undefined && (!name || name.length > 100)) {
+    return res.status(400).json({ error: 'Emri i hapësirës duhet të ketë 1 deri në 100 karaktere' });
+  }
+  if (color !== undefined && (typeof color !== 'string' || !spaceColors.has(color))) {
+    return res.status(400).json({ error: 'Ngjyra e hapësirës nuk është e vlefshme' });
+  }
   try {
     const space = await prisma.space.findUnique({ where: { id: spaceId } });
     if (!space) {

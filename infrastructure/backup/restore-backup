@@ -8,6 +8,10 @@ set -eu
 kind="${1:-}"
 source_file="${2:-}"
 [ -f "$source_file" ] || { echo "Skedari i backup-it nuk u gjet" >&2; exit 1; }
+[ -f "${source_file}.hmac" ] || { echo "Mungon HMAC-i i backup-it; rikthimi u bllokua" >&2; exit 1; }
+expected_hmac="$(tr -d '[:space:]' < "${source_file}.hmac")"
+actual_hmac="$(openssl dgst -sha256 -hmac "$BACKUP_ENCRYPTION_KEY" "$source_file" | awk '{print $2}')"
+[ -n "$expected_hmac" ] && [ "$expected_hmac" = "$actual_hmac" ] || { echo "HMAC-i nuk përputhet; backup-i ose çelësi nuk është valid" >&2; exit 1; }
 if [ -f "${source_file}.sha256" ]; then
   sha256sum -c "${source_file}.sha256"
 fi
