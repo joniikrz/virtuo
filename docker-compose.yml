@@ -109,6 +109,8 @@ services:
       - "5000"
     networks:
       - private
+      # Dalje e kontrolluar në internet për SMTP/DNS. Backend-i nuk publikon portë në këtë rrjet.
+      - egress
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 10s
@@ -197,3 +199,4 @@ networks:
   public:
   private:
     internal: true
+  egress:
