@@ -7,6 +7,7 @@ import { signPasswordResetToken, signSessionToken, verifyToken } from '../securi
 
 vi.mock('../prisma', () => ({
   default: {
+    $transaction: vi.fn(async (operations: unknown[]) => Promise.all(operations)),
     user: {
       findUnique: vi.fn(),
       create: vi.fn(),
@@ -14,6 +15,7 @@ vi.mock('../prisma', () => ({
       count: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
+      delete: vi.fn(),
     },
     role: {
       findUnique: vi.fn(),
@@ -23,6 +25,11 @@ vi.mock('../prisma', () => ({
       create: vi.fn(),
       findMany: vi.fn(),
     },
+    space: { findMany: vi.fn() },
+    task: { findMany: vi.fn() },
+    attachment: { findMany: vi.fn() },
+    comment: { findMany: vi.fn() },
+    notification: { deleteMany: vi.fn() },
   },
 }));
 
@@ -182,6 +189,37 @@ describe('Auth Endpoints API Tests', () => {
 
     expect(res.status).toBe(403);
     expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('DELETE /api/auth/users/:id - Admin-i fshin llogarinë dhe të dhënat e lidhura', async () => {
+    const adminPasswordHash = await bcrypt.hash('AdminPassword123!', 10);
+    vi.mocked(prisma.user.findUnique)
+      .mockResolvedValueOnce({
+        id: 'admin-1', email: 'admin@virtuo.local', firstName: 'Admin', lastName: 'User',
+        sessionVersion: 0, role: { name: 'ADMIN' }, emailNotifications: true, inAppNotifications: true,
+      } as never)
+      .mockResolvedValueOnce({ passwordHash: adminPasswordHash } as never)
+      .mockResolvedValueOnce({
+        id: 'user-2', email: 'user2@virtuo.local', firstName: 'User', lastName: 'Two',
+      } as never);
+    vi.mocked(prisma.space.findMany).mockResolvedValue([{ id: 'space-owned' }] as never);
+    vi.mocked(prisma.task.findMany).mockResolvedValue([{ id: 'task-owned' }] as never);
+    vi.mocked(prisma.attachment.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.comment.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.user.delete).mockResolvedValue({ id: 'user-2' } as never);
+    const token = signSessionToken('admin-1', 0);
+
+    const res = await request(app)
+      .delete('/api/auth/users/user-2')
+      .set('Cookie', [`token=${token}`])
+      .send({ currentPassword: 'AdminPassword123!' });
+
+    expect(res.status).toBe(200);
+    expect(prisma.notification.deleteMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { OR: expect.arrayContaining([{ taskId: { in: ['task-owned'] } }]) },
+    }));
+    expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'user-2' } });
+    expect(res.body.deletedUserId).toBe('user-2');
   });
 
   it('POST /api/auth/forgot-password/verify - Verifikon kodin dhe kthen token të përkohshëm', async () => {

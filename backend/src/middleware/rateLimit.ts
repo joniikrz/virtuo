@@ -4,6 +4,8 @@ interface RateLimitOptions {
   windowMs: number;
   max: number;
   scope: string;
+  keyGenerator?: (req: Request) => string;
+  skipSuccessfulRequests?: boolean;
 }
 
 interface Bucket {
@@ -13,7 +15,7 @@ interface Bucket {
 
 const buckets = new Map<string, Bucket>();
 
-export function rateLimit({ windowMs, max, scope }: RateLimitOptions) {
+export function rateLimit({ windowMs, max, scope, keyGenerator, skipSuccessfulRequests = false }: RateLimitOptions) {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (process.env.NODE_ENV === 'test') {
       next();
@@ -21,7 +23,8 @@ export function rateLimit({ windowMs, max, scope }: RateLimitOptions) {
     }
 
     const now = Date.now();
-    const key = `${scope}:${req.ip || req.socket.remoteAddress || 'unknown'}`;
+    const identifier = keyGenerator?.(req) || req.ip || req.socket.remoteAddress || 'unknown';
+    const key = `${scope}:${identifier}`;
     const current = buckets.get(key);
     const bucket = !current || current.resetAt <= now
       ? { count: 0, resetAt: now + windowMs }
@@ -34,9 +37,23 @@ export function rateLimit({ windowMs, max, scope }: RateLimitOptions) {
     res.setHeader('RateLimit-Reset', String(Math.ceil(bucket.resetAt / 1000)));
 
     if (bucket.count > max) {
-      res.setHeader('Retry-After', String(Math.max(1, Math.ceil((bucket.resetAt - now) / 1000))));
-      res.status(429).json({ error: 'Shumë kërkesa. Provo përsëri pas pak.' });
+      const retryAfter = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
+      res.setHeader('Retry-After', String(retryAfter));
+      res.status(429).json({
+        error: `Ke bërë shumë tentativa për këtë llogari. Provo përsëri pas ${Math.ceil(retryAfter / 60)} minutash.`,
+        retryAfter,
+      });
       return;
+    }
+
+    if (skipSuccessfulRequests) {
+      res.once('finish', () => {
+        if (res.statusCode >= 400) return;
+        const saved = buckets.get(key);
+        if (!saved) return;
+        saved.count = Math.max(0, saved.count - 1);
+        if (saved.count === 0) buckets.delete(key);
+      });
     }
     next();
   };

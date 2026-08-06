@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Login from './components/Login';
 import Navbar from './components/Navbar';
 import Dashboard from './components/Dashboard';
+import AdminPanel from './components/AdminPanel';
 import { readApiJson } from './lib/api';
 
 export interface User {
@@ -230,12 +231,16 @@ export default function App() {
             onOpenTask={handleOpenTask}
             onRespondToSpaceInvite={handleSpaceInviteResponse}
           />
-          <Dashboard
-            currentUser={user}
-            taskNavigationRequest={taskNavigationRequest}
-            onTaskNavigationHandled={() => setTaskNavigationRequest(null)}
-            onTaskNavigationUnavailable={handleUnavailableNotification}
-          />
+          {user.role === 'ADMIN' ? (
+            <AdminPanel currentUser={user} />
+          ) : (
+            <Dashboard
+              currentUser={user}
+              taskNavigationRequest={taskNavigationRequest}
+              onTaskNavigationHandled={() => setTaskNavigationRequest(null)}
+              onTaskNavigationUnavailable={handleUnavailableNotification}
+            />
+          )}
         </>
       ) : (
         <Login onLoginSuccess={(u) => setUser(u)} />

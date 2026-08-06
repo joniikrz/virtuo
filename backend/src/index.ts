@@ -71,7 +71,16 @@ app.use('/api', (req, res, next) => {
   return next();
 });
 
-app.use('/api/auth/login', rateLimit({ scope: 'login', windowMs: 15 * 60 * 1000, max: 10 }));
+app.use('/api/auth/login', rateLimit({
+  scope: 'login',
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  skipSuccessfulRequests: true,
+  keyGenerator: (req) => {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase().slice(0, 254) : 'pa-email';
+    return `${req.ip || req.socket.remoteAddress || 'unknown'}:${email}`;
+  },
+}));
 app.use('/api/auth/forgot-password', rateLimit({ scope: 'recovery', windowMs: 15 * 60 * 1000, max: 5 }));
 app.use('/api/auth/reset-password', rateLimit({ scope: 'reset', windowMs: 15 * 60 * 1000, max: 5 }));
 app.use('/api/auth/register', rateLimit({ scope: 'register', windowMs: 60 * 60 * 1000, max: 10 }));

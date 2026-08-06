@@ -146,18 +146,22 @@ async function createAssignmentNotifications(task: any, onlyUserIds?: Set<string
       })),
     });
   }
-  // Email-i është best-effort dhe nuk duhet ta mbajë hapur kërkesën e krijimit të taskut.
-  void Promise.all(recipients
-    .filter((user: any) => user.emailNotifications)
-    .map((user: any) => sendTaskAssignedEmail(
-      user.email,
-      `${user.firstName} ${user.lastName}`,
-      task.title,
-      `${task.createdBy.firstName} ${task.createdBy.lastName}`,
-      task.deadline,
-      task.id,
-    )))
-    .catch((error) => console.error('Background task assignment email error:', error));
+  // Gmail kufizon lidhjet paralele. Pool-i dhe radha sekuenciale sigurojnë që çdo marrës
+  // të përpunohet pa e mbajtur hapur kërkesën e krijimit të taskut.
+  const emailRecipients = recipients.filter((user: any) => user.emailNotifications);
+  void (async () => {
+    for (const user of emailRecipients) {
+      const sent = await sendTaskAssignedEmail(
+        user.email,
+        `${user.firstName} ${user.lastName}`,
+        task.title,
+        `${task.createdBy.firstName} ${task.createdBy.lastName}`,
+        task.deadline,
+        task.id,
+      );
+      if (!sent) console.error(`Task assignment email was not delivered to user ${user.id}`);
+    }
+  })().catch((error) => console.error('Background task assignment email queue error:', error));
 }
 
 async function createCompletionNotification(task: any, completedBy: string) {

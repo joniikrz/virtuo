@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import fs from 'fs';
+import path from 'path';
 import prisma from '../prisma';
 import { authenticateToken, requireAdmin, AuthRequest } from '../middleware/auth';
 import { logActivity } from '../services/activity';
@@ -21,6 +23,7 @@ const router = Router();
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Barazon afërsisht kohën e përgjigjes kur email-i nuk ekziston, pa ruajtur ndonjë sekret real.
 const DUMMY_BCRYPT_HASH = '$2a$12$cjgdfWrwg6sC61y2maoHR.If12dicf/GR9TMif4SAiYPLuonTud1y';
+const uploadDirectory = path.resolve(process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads'));
 
 function publicUser(user: any, roleName?: string) {
   return {
@@ -41,6 +44,14 @@ function validRecoveryCode(value: unknown): value is string {
 
 function normalizeEmail(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase().slice(0, 255) : '';
+}
+
+async function removeUserFiles(filePaths: string[]): Promise<void> {
+  await Promise.all(filePaths.map(async (filePath) => {
+    const resolvedPath = path.resolve(filePath);
+    if (!resolvedPath.startsWith(`${uploadDirectory}${path.sep}`)) return;
+    await fs.promises.unlink(resolvedPath).catch(() => undefined);
+  }));
 }
 
 /**
@@ -501,6 +512,91 @@ router.put('/users/:id/password', authenticateToken, requireAdmin, async (req: A
   } catch (error) {
     console.error('Admin password reset error:', error);
     res.status(500).json({ error: 'Ndodhi një gabim gjatë ndryshimit të fjalëkalimit' });
+  }
+});
+
+/**
+ * DELETE /api/auth/users/:id
+ * Fshin llogarinë dhe të dhënat e lidhura. Kërkon fjalëkalimin aktual të Admin-it.
+ */
+router.delete('/users/:id', authenticateToken, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
+  const adminId = req.user?.id;
+  const targetUserId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
+  const currentPassword = req.body?.currentPassword;
+
+  if (!adminId) {
+    res.status(401).json({ error: 'I paautorizuar' });
+    return;
+  }
+  if (!targetUserId || typeof currentPassword !== 'string' || !currentPassword) {
+    res.status(400).json({ error: 'Përdoruesi dhe fjalëkalimi aktual i Admin-it janë të detyrueshëm' });
+    return;
+  }
+  if (targetUserId === adminId) {
+    res.status(400).json({ error: 'Nuk mund ta fshish llogarinë me të cilën je kyçur' });
+    return;
+  }
+
+  try {
+    const [admin, targetUser] = await Promise.all([
+      prisma.user.findUnique({ where: { id: adminId }, select: { passwordHash: true } }),
+      prisma.user.findUnique({
+        where: { id: targetUserId },
+        select: { id: true, email: true, firstName: true, lastName: true },
+      }),
+    ]);
+    if (!admin || !(await bcrypt.compare(currentPassword, admin.passwordHash))) {
+      res.status(400).json({ error: 'Fjalëkalimi aktual i Admin-it është i gabuar' });
+      return;
+    }
+    if (!targetUser) {
+      res.status(404).json({ error: 'Përdoruesi nuk u gjet' });
+      return;
+    }
+
+    const ownedSpaces = await prisma.space.findMany({
+      where: { createdById: targetUser.id },
+      select: { id: true },
+    });
+    const ownedSpaceIds = ownedSpaces.map((space) => space.id);
+    const affectedTasks = await prisma.task.findMany({
+      where: { OR: [{ createdById: targetUser.id }, { spaceId: { in: ownedSpaceIds } }] },
+      select: { id: true },
+    });
+    const affectedTaskIds = affectedTasks.map((task) => task.id);
+    const [attachments, comments] = await Promise.all([
+      prisma.attachment.findMany({
+        where: { OR: [{ uploadedById: targetUser.id }, { taskId: { in: affectedTaskIds } }] },
+        select: { id: true, filePath: true },
+      }),
+      prisma.comment.findMany({
+        where: { authorId: targetUser.id },
+        select: { id: true },
+      }),
+    ]);
+
+    await prisma.$transaction([
+      prisma.notification.deleteMany({
+        where: {
+          OR: [
+            { taskId: { in: affectedTaskIds } },
+            { resourceType: 'ATTACHMENT', resourceId: { in: attachments.map((item) => item.id) } },
+            { resourceType: 'COMMENT', resourceId: { in: comments.map((item) => item.id) } },
+          ],
+        },
+      }),
+      prisma.user.delete({ where: { id: targetUser.id } }),
+    ]);
+    await removeUserFiles(attachments.map((attachment) => attachment.filePath));
+    await logActivity(adminId, 'ADMIN_USER_DELETED', `Fshiu llogarinë ${targetUser.email}`);
+
+    res.json({
+      message: `Llogaria e ${targetUser.firstName} ${targetUser.lastName} dhe të dhënat e lidhura u fshinë.`,
+      deletedUserId: targetUser.id,
+    });
+  } catch (error) {
+    console.error('Admin delete user error:', error);
+    res.status(500).json({ error: 'Ndodhi një gabim gjatë fshirjes së llogarisë' });
   }
 });
 

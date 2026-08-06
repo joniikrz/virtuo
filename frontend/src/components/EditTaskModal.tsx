@@ -94,6 +94,7 @@ export default function EditTaskModal({ task, spaceMembers, onClose, onSubmit, e
               </div>
             </div>
             
+            <div className="space-private-note"><strong>Shto ose hiq anëtarë</strong><p>Anëtarët e rinj marrin njoftim dhe email sapo t'i ruash ndryshimet.</p></div>
             <AssigneeSelector members={spaceMembers} selectedIds={taskAssigneeIds} onChange={setTaskAssigneeIds} />
 
           </div>

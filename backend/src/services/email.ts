@@ -8,6 +8,7 @@ const smtpConfigured = Boolean(smtpHost && smtpUser && smtpPass && defaultFrom);
 
 const transporter = smtpConfigured
   ? nodemailer.createTransport({
+      pool: true,
       host: smtpHost,
       port: Number(process.env.SMTP_PORT) || 587,
       secure: process.env.SMTP_SECURE === 'true', // true për 465, false për STARTTLS/587
@@ -20,6 +21,10 @@ const transporter = smtpConfigured
       connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT_MS) || 5_000,
       greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT_MS) || 5_000,
       socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT_MS) || 10_000,
+      maxConnections: Number(process.env.SMTP_MAX_CONNECTIONS) || 1,
+      maxMessages: Number(process.env.SMTP_MAX_MESSAGES_PER_CONNECTION) || 50,
+      rateDelta: Number(process.env.SMTP_RATE_DELTA_MS) || 1_000,
+      rateLimit: Number(process.env.SMTP_RATE_LIMIT) || 2,
     })
   : null;
 

@@ -101,7 +101,10 @@ export default function TaskDetailModal({
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
             <div>
-              <span className="task-detail-label">Anëtarët e caktuar</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <span className="task-detail-label">Anëtarët e caktuar</span>
+                {canEdit && <button type="button" onClick={onEditClick} className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }}><Edit size={14} /> Shto/hiq</button>}
+              </div>
               <p style={{ marginTop: '6px', fontSize: '0.95rem' }}>
                 {assignedUsers.length ? assignedUsers.map((user) => `${user.firstName} ${user.lastName}`).join(', ') : 'I pacaktuar'}
               </p>
@@ -114,23 +117,7 @@ export default function TaskDetailModal({
             </div>
           </div>
 
-          <div className="task-detail-section" style={{ marginBottom: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span className="task-detail-label">Përshkrimi</span>
-              {canEdit && (
-                <button 
-                  onClick={onEditClick}
-                  className="btn btn-secondary btn-sm"
-                  style={{ padding: '4px 8px' }}
-                >
-                  <Edit size={14} /> Ndrysho
-                </button>
-              )}
-            </div>
-            <p style={{ marginTop: '6px', fontSize: '0.95rem', color: 'hsl(var(--text-secondary))', whiteSpace: 'pre-line' }}>
-              {task.description || 'Nuk ka përshkrim për këtë detyrë.'}
-            </p>
-          </div>
+          {task.description?.trim() && <div className="task-detail-section" style={{ marginBottom: '20px' }}><span className="task-detail-label">Përshkrimi</span><p style={{ marginTop: '6px', fontSize: '0.95rem', color: 'hsl(var(--text-secondary))', whiteSpace: 'pre-line' }}>{task.description}</p></div>}
 
           {/* Shtojcat (Attachments) */}
           <div className="task-detail-section">

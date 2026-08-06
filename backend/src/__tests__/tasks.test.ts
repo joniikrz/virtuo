@@ -162,6 +162,42 @@ describe('Tasks API Tests', () => {
     );
   });
 
+  it('POST /api/spaces/:spaceId/tasks - Përpunon email-in për secilin assignee', async () => {
+    const assignedUsers = ['a', 'b', 'c'].map((suffix) => ({
+      id: `user-${suffix}`,
+      email: `${suffix}@example.com`,
+      firstName: `User ${suffix.toUpperCase()}`,
+      lastName: 'Test',
+      emailNotifications: true,
+      inAppNotifications: true,
+    }));
+    vi.mocked(prisma.space.findUnique).mockResolvedValue({ id: 'space-1', createdById: 'test-user-id' } as never);
+    vi.mocked(prisma.spaceMember.count).mockResolvedValue(3);
+    vi.mocked(prisma.task.create).mockResolvedValue({
+      id: 'task-many', title: 'Task për ekipin', description: '', status: 'TODO', priority: 'NORMAL',
+      deadline: new Date('2026-12-31T12:00:00.000Z'), spaceId: 'space-1', createdById: 'test-user-id',
+      createdBy: { id: 'test-user-id', email: 'creator@example.com', firstName: 'Test', lastName: 'User' },
+      assignedTo: assignedUsers[0],
+      assignees: assignedUsers.map((user) => ({ userId: user.id, user })),
+    } as never);
+    vi.mocked(sendTaskAssignedEmail).mockResolvedValue(true);
+    const token = signSessionToken('test-user-id', 0);
+
+    const res = await request(app)
+      .post('/api/spaces/space-1/tasks')
+      .set('Cookie', [`token=${token}`])
+      .send({
+        title: 'Task për ekipin', deadline: '2026-12-31T12:00:00.000Z',
+        assignedToIds: assignedUsers.map((user) => user.id),
+      });
+
+    expect(res.status).toBe(201);
+    await vi.waitFor(() => expect(sendTaskAssignedEmail).toHaveBeenCalledTimes(3));
+    expect(vi.mocked(sendTaskAssignedEmail).mock.calls.map((call) => call[0])).toEqual([
+      'a@example.com', 'b@example.com', 'c@example.com',
+    ]);
+  });
+
   it('GET /api/spaces/:spaceId/tasks - Kthen të gjitha kartat e bordit për anëtarët', async () => {
     vi.mocked(prisma.space.findUnique).mockResolvedValue({
       id: 'space-1',

@@ -57,7 +57,7 @@ model Space {
   color       String        @default("#0079BF")
   isPrivate   Boolean       @default(true) @map("is_private")
   createdById String        @map("created_by_id")
-  createdBy   User          @relation("SpaceCreator", fields: [createdById], references: [id])
+  createdBy   User          @relation("SpaceCreator", fields: [createdById], references: [id], onDelete: Cascade)
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
   members     SpaceMember[]
@@ -114,7 +114,7 @@ model Task {
   assignedTo   User?            @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
   assignees    TaskAssignee[]
   createdById  String           @map("created_by_id")
-  createdBy    User             @relation("TaskCreator", fields: [createdById], references: [id])
+  createdBy    User             @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
   createdAt    DateTime         @default(now()) @map("created_at")
   updatedAt    DateTime         @updatedAt @map("updated_at")
   attachments  Attachment[]
@@ -142,7 +142,7 @@ model Attachment {
   fileSize     Int      @map("file_size")
   mimeType     String   @map("mime_type")
   uploadedById String   @map("uploaded_by_id")
-  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
   uploadedAt   DateTime @default(now()) @map("uploaded_at")
 
   @@index([taskId, uploadedAt])
@@ -181,7 +181,7 @@ model Comment {
   taskId    String   @map("task_id")
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   authorId  String   @map("author_id")
-  author    User     @relation(fields: [authorId], references: [id])
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([taskId, createdAt])
