@@ -3,6 +3,7 @@ import request from 'supertest';
 import { app } from '../index';
 import prisma from '../prisma';
 import { signSessionToken } from '../security';
+import { sendTaskAssignedEmail } from '../services/email';
 
 vi.mock('../prisma', () => ({
   default: {
@@ -102,6 +103,62 @@ describe('Tasks API Tests', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.title).toBe('Krijo UI në React');
+  });
+
+  it('POST /api/spaces/:spaceId/tasks - Nuk e vonon përgjigjen duke pritur SMTP-në', async () => {
+    vi.mocked(prisma.space.findUnique).mockResolvedValue({
+      id: 'space-1',
+      name: 'Sprint Board',
+      createdById: 'test-user-id',
+    } as never);
+    vi.mocked(prisma.spaceMember.count).mockResolvedValue(1);
+    vi.mocked(prisma.task.create).mockResolvedValue({
+      id: 'task-email-1',
+      title: 'Task me email',
+      description: '',
+      status: 'TODO',
+      priority: 'NORMAL',
+      deadline: new Date('2026-12-31T12:00:00.000Z'),
+      spaceId: 'space-1',
+      createdById: 'test-user-id',
+      createdBy: {
+        id: 'test-user-id', email: 'creator@example.com', firstName: 'Test', lastName: 'User',
+      },
+      assignedTo: {
+        id: 'assigned-user-id', email: 'assigned@example.com', firstName: 'Assigned', lastName: 'User',
+        emailNotifications: true, inAppNotifications: true,
+      },
+      assignees: [{
+        userId: 'assigned-user-id',
+        user: {
+          id: 'assigned-user-id', email: 'assigned@example.com', firstName: 'Assigned', lastName: 'User',
+          emailNotifications: true, inAppNotifications: true,
+        },
+      }],
+    } as never);
+    vi.mocked(sendTaskAssignedEmail).mockImplementation(() => new Promise((resolve) => {
+      setTimeout(() => resolve(false), 750);
+    }));
+
+    const startedAt = Date.now();
+    const res = await request(app)
+      .post('/api/spaces/space-1/tasks')
+      .set('Cookie', [`token=${mockToken}`])
+      .send({
+        title: 'Task me email',
+        deadline: '2026-12-31T12:00:00.000Z',
+        assignedToIds: ['assigned-user-id'],
+      });
+
+    expect(res.status).toBe(201);
+    expect(Date.now() - startedAt).toBeLessThan(500);
+    expect(sendTaskAssignedEmail).toHaveBeenCalledWith(
+      'assigned@example.com',
+      'Assigned User',
+      'Task me email',
+      'Test User',
+      expect.any(Date),
+    );
   });
 
   it('GET /api/spaces/:spaceId/tasks - Kthen të gjitha kartat e bordit për anëtarët', async () => {

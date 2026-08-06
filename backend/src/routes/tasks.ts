@@ -146,7 +146,8 @@ async function createAssignmentNotifications(task: any, onlyUserIds?: Set<string
       })),
     });
   }
-  await Promise.all(recipients
+  // Email-i është best-effort dhe nuk duhet ta mbajë hapur kërkesën e krijimit të taskut.
+  void Promise.all(recipients
     .filter((user: any) => user.emailNotifications)
     .map((user: any) => sendTaskAssignedEmail(
       user.email,
@@ -154,7 +155,8 @@ async function createAssignmentNotifications(task: any, onlyUserIds?: Set<string
       task.title,
       `${task.createdBy.firstName} ${task.createdBy.lastName}`,
       task.deadline,
-    )));
+    )))
+    .catch((error) => console.error('Background task assignment email error:', error));
 }
 
 async function createCompletionNotification(task: any, completedBy: string) {
@@ -168,7 +170,12 @@ async function createCompletionNotification(task: any, completedBy: string) {
     ? task.assignees.map((assignment: any) => `${assignment.user.firstName} ${assignment.user.lastName}`).join(', ')
     : task.assignedTo ? `${task.assignedTo.firstName} ${task.assignedTo.lastName}` : 'Një anëtar';
   if (task.createdBy.emailNotifications) {
-    await sendTaskCompletedEmail(task.createdBy.email, `${task.createdBy.firstName} ${task.createdBy.lastName}`, task.title, completedByNames);
+    void sendTaskCompletedEmail(
+      task.createdBy.email,
+      `${task.createdBy.firstName} ${task.createdBy.lastName}`,
+      task.title,
+      completedByNames,
+    ).catch((error) => console.error('Background task completion email error:', error));
   }
 }
 

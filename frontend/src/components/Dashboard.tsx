@@ -12,6 +12,7 @@ import RegisterUserModal from './RegisterUserModal';
 import StatsPanel from './StatsPanel';
 import TaskFilters, { DEFAULT_TASK_FILTERS, TaskFiltersState } from './TaskFilters';
 import type { TaskNavigationRequest } from '../App';
+import { apiErrorMessage, readApiJson } from '../lib/api';
 
 interface DashboardProps {
   currentUser: User;
@@ -345,13 +346,13 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(taskData),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const data = await readApiJson<Task>(res);
+      if (!res.ok) throw new Error(apiErrorMessage(res, data, 'Detyra nuk mund të krijohet.'));
 
       setTasks((current) => [data, ...current]);
-      await fetchSpaces();
       setShowCreateTask(false);
       setSuccessMsg('Detyra u krijua me sukses.');
+      void fetchSpaces();
       window.dispatchEvent(new Event('virtuo:data-change'));
     } catch (err: any) {
       setErrorMsg(err.message);

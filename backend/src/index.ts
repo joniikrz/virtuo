@@ -12,6 +12,7 @@ import notificationsRouter from './routes/notifications';
 import tagsRouter from './routes/tags';
 import { seedDatabase } from './seed';
 import { rateLimit } from './middleware/rateLimit';
+import { verifyEmailTransport } from './services/email';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
@@ -135,6 +136,8 @@ if (process.env.NODE_ENV !== 'test') {
 
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Serveri po punon në portën http://0.0.0.0:${PORT}`);
+      // Verifikimi raporton konfigurimin në log, por nuk e bllokon nisjen e aplikacionit.
+      void verifyEmailTransport();
     });
     server.requestTimeout = requestTimeoutMs;
     server.headersTimeout = Math.min(requestTimeoutMs + 5000, 65000);

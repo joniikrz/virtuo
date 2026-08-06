@@ -16,16 +16,23 @@ export default function CreateTaskModal({ activeSpace, spaceMembers, onClose, on
   const [taskDeadline, setTaskDeadline] = useState('');
   const [taskAssigneeIds, setTaskAssigneeIds] = useState<string[]>([]);
   const [taskPriority, setTaskPriority] = useState('NORMAL');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({
-      title: taskTitle,
-      description: taskDesc,
-      deadline: taskDeadline,
-      assignedToIds: taskAssigneeIds,
-      priority: taskPriority,
-    });
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await onSubmit({
+        title: taskTitle,
+        description: taskDesc,
+        deadline: taskDeadline,
+        assignedToIds: taskAssigneeIds,
+        priority: taskPriority,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -33,7 +40,7 @@ export default function CreateTaskModal({ activeSpace, spaceMembers, onClose, on
       <div className="modal-content">
         <div className="modal-header">
           <h3>Krijo detyrë të re</h3>
-          <button type="button" className="modal-close-btn" onClick={onClose}>&times;</button>
+          <button type="button" className="modal-close-btn" onClick={onClose} disabled={isSubmitting}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
@@ -93,8 +100,10 @@ export default function CreateTaskModal({ activeSpace, spaceMembers, onClose, on
 
           </div>
           <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Anulo</button>
-            <button type="submit" className="btn btn-primary" disabled={taskAssigneeIds.length === 0}>Krijo detyrën</button>
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSubmitting}>Anulo</button>
+            <button type="submit" className="btn btn-primary" disabled={taskAssigneeIds.length === 0 || isSubmitting}>
+              {isSubmitting ? 'Duke u krijuar...' : 'Krijo detyrën'}
+            </button>
           </div>
         </form>
       </div>

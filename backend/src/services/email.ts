@@ -1,24 +1,56 @@
 import nodemailer from 'nodemailer';
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'localhost',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USER || '',
-    pass: process.env.SMTP_PASS || '',
-  },
-  requireTLS: process.env.SMTP_REQUIRE_TLS !== 'false',
-  tls: {
-    minVersion: 'TLSv1.2',
-    rejectUnauthorized: process.env.SMTP_TLS_REJECT_UNAUTHORIZED !== 'false',
-  },
-  connectionTimeout: 10_000,
-  greetingTimeout: 10_000,
-  socketTimeout: 20_000,
-});
+const smtpHost = process.env.SMTP_HOST?.trim() || '';
+const smtpUser = process.env.SMTP_USER?.trim() || '';
+const smtpPass = process.env.SMTP_PASS?.trim() || '';
+const defaultFrom = process.env.SMTP_FROM?.trim() || '';
+const smtpConfigured = Boolean(smtpHost && smtpUser && smtpPass && defaultFrom);
 
-const defaultFrom = process.env.SMTP_FROM || '"Virtuo Task Manager" <no-reply@virtuo.local>';
+const transporter = smtpConfigured
+  ? nodemailer.createTransport({
+      host: smtpHost,
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: process.env.SMTP_SECURE === 'true', // true për 465, false për STARTTLS/587
+      auth: { user: smtpUser, pass: smtpPass },
+      requireTLS: process.env.SMTP_REQUIRE_TLS !== 'false',
+      tls: {
+        minVersion: 'TLSv1.2',
+        rejectUnauthorized: process.env.SMTP_TLS_REJECT_UNAUTHORIZED !== 'false',
+      },
+      connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT_MS) || 5_000,
+      greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT_MS) || 5_000,
+      socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT_MS) || 10_000,
+    })
+  : null;
+
+let missingConfigurationLogged = false;
+
+function logMissingConfigurationOnce() {
+  if (missingConfigurationLogged) return;
+  missingConfigurationLogged = true;
+  console.warn('[SMTP] Email-et janë çaktivizuar: plotëso SMTP_HOST, SMTP_USER, SMTP_PASS dhe SMTP_FROM.');
+}
+
+export function isEmailConfigured(): boolean {
+  return smtpConfigured;
+}
+
+export async function verifyEmailTransport(): Promise<boolean> {
+  if (!transporter) {
+    logMissingConfigurationOnce();
+    return false;
+  }
+
+  try {
+    await transporter.verify();
+    console.log(`[SMTP] Lidhja u verifikua me sukses te ${smtpHost}:${process.env.SMTP_PORT || '587'}.`);
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Gabim i panjohur SMTP';
+    console.error(`[SMTP] Verifikimi dështoi: ${message}`);
+    return false;
+  }
+}
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>'"]/g, (character) => ({
@@ -33,7 +65,12 @@ function safeSubject(value: string): string {
 /**
  * Dërgon një njoftim me email kur një punonjësi i caktohet një detyrë e re.
  */
-export async function sendTaskAssignedEmail(toEmail: string, employeeName: string, taskTitle: string, creatorName: string, deadline: Date) {
+export async function sendTaskAssignedEmail(toEmail: string, employeeName: string, taskTitle: string, creatorName: string, deadline: Date): Promise<boolean> {
+  if (!transporter) {
+    logMissingConfigurationOnce();
+    return false;
+  }
+
   try {
     const safeEmployeeName = escapeHtml(employeeName);
     const safeTaskTitle = escapeHtml(taskTitle);
@@ -63,15 +100,22 @@ export async function sendTaskAssignedEmail(toEmail: string, employeeName: strin
       `,
     });
     console.log('Task assigned email sent: %s', info.messageId);
+    return true;
   } catch (error) {
     console.error('Error sending task assigned email:', error);
+    return false;
   }
 }
 
 /**
  * Dërgon një njoftim me email te menaxheri kur punonjësi përfundon një detyrë.
  */
-export async function sendTaskCompletedEmail(toEmail: string, managerName: string, taskTitle: string, employeeName: string) {
+export async function sendTaskCompletedEmail(toEmail: string, managerName: string, taskTitle: string, employeeName: string): Promise<boolean> {
+  if (!transporter) {
+    logMissingConfigurationOnce();
+    return false;
+  }
+
   try {
     const safeManagerName = escapeHtml(managerName);
     const safeTaskTitle = escapeHtml(taskTitle);
@@ -95,7 +139,9 @@ export async function sendTaskCompletedEmail(toEmail: string, managerName: strin
       `,
     });
     console.log('Task completed email sent: %s', info.messageId);
+    return true;
   } catch (error) {
     console.error('Error sending task completed email:', error);
+    return false;
   }
 }
