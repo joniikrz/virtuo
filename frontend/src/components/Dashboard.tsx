@@ -11,9 +11,12 @@ import InviteMemberModal from './InviteMemberModal';
 import RegisterUserModal from './RegisterUserModal';
 import StatsPanel from './StatsPanel';
 import TaskFilters, { DEFAULT_TASK_FILTERS, TaskFiltersState } from './TaskFilters';
+import type { TaskNavigationRequest } from '../App';
 
 interface DashboardProps {
   currentUser: User;
+  taskNavigationRequest: TaskNavigationRequest | null;
+  onTaskNavigationHandled: () => void;
 }
 
 const priorityWeight: Record<string, number> = { LOW: 1, NORMAL: 2, HIGH: 3, URGENT: 4 };
@@ -36,7 +39,7 @@ const taskDataRevision = (spaceId: string, tasks: Task[]) => `${spaceId}|${tasks
   task._count?.attachments || 0,
 ].join(':')).join('|')}`;
 
-export default function Dashboard({ currentUser }: DashboardProps) {
+export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNavigationHandled }: DashboardProps) {
   const isAdmin = currentUser.role === 'ADMIN';
 
   const [spaces, setSpaces] = useState<Space[]>([]);
@@ -179,6 +182,43 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     const detailedTask = await fetchTaskDetail(task.id);
     if (detailedTask) setSelectedTask(detailedTask);
   }, [fetchTaskDetail]);
+
+  useEffect(() => {
+    if (!taskNavigationRequest) return;
+    let cancelled = false;
+
+    const openNotificationTask = async () => {
+      setErrorMsg('');
+      try {
+        const detailedTask = await fetchTaskDetail(taskNavigationRequest.taskId);
+        if (!detailedTask) throw new Error('Detyra nuk u gjet ose nuk ke më qasje në të.');
+
+        let availableSpaces = spaces;
+        let targetSpace = availableSpaces.find((space) => space.id === detailedTask.spaceId);
+        if (!targetSpace) {
+          const response = await fetch('/api/spaces', { cache: 'no-store' });
+          if (!response.ok) throw new Error('Hapësira e detyrës nuk mund të ngarkohet.');
+          availableSpaces = await response.json() as Space[];
+          targetSpace = availableSpaces.find((space) => space.id === detailedTask.spaceId);
+          if (!cancelled) setSpaces(availableSpaces);
+        }
+        if (!targetSpace) throw new Error('Hapësira e kësaj detyre nuk është më e disponueshme.');
+
+        if (!cancelled) {
+          setActiveSpace(targetSpace);
+          setSelectedTask(detailedTask);
+          setTaskFilters(DEFAULT_TASK_FILTERS);
+        }
+      } catch (error) {
+        if (!cancelled) setErrorMsg(error instanceof Error ? error.message : 'Detyra nuk mund të hapet.');
+      } finally {
+        if (!cancelled) onTaskNavigationHandled();
+      }
+    };
+
+    void openNotificationTask();
+    return () => { cancelled = true; };
+  }, [taskNavigationRequest?.requestId]);
 
   const fetchSpaceMembers = async (spaceId: string) => {
     try {

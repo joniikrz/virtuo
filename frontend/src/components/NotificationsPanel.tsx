@@ -1,16 +1,17 @@
 import React, { useEffect } from 'react';
-import { Bell, CheckCheck, Inbox, X } from 'lucide-react';
+import { Bell, CheckCheck, ChevronRight, Inbox, X } from 'lucide-react';
 import { Notification } from '../types';
 
 interface NotificationsPanelProps {
   notifications: Notification[];
   onMarkAsRead: (id: string) => void;
   onMarkAllAsRead: () => void;
+  onOpenTask: (taskId: string) => void;
   isOpen: boolean;
   onClose: () => void;
 }
 
-export default function NotificationsPanel({ notifications, onMarkAsRead, onMarkAllAsRead, isOpen, onClose }: NotificationsPanelProps) {
+export default function NotificationsPanel({ notifications, onMarkAsRead, onMarkAllAsRead, onOpenTask, isOpen, onClose }: NotificationsPanelProps) {
   const unreadCount = notifications.filter((notification) => !notification.isRead).length;
 
   useEffect(() => {
@@ -65,7 +66,9 @@ export default function NotificationsPanel({ notifications, onMarkAsRead, onMark
                 className={`notification-drawer__item ${notification.isRead ? '' : 'unread'}`}
                 onClick={() => {
                   if (!notification.isRead) onMarkAsRead(notification.id);
+                  if (notification.taskId) onOpenTask(notification.taskId);
                 }}
+                title={notification.taskId ? 'Hap detyrën' : 'Shëno si të lexuar'}
               >
                 <span className="notification-drawer__status" aria-hidden="true" />
                 <div className="notification-drawer__content">
@@ -75,6 +78,7 @@ export default function NotificationsPanel({ notifications, onMarkAsRead, onMark
                     {new Date(notification.createdAt).toLocaleString('sq-AL', { dateStyle: 'medium', timeStyle: 'short' })}
                   </time>
                 </div>
+                {notification.taskId && <ChevronRight className="notification-drawer__open-icon" size={17} aria-hidden="true" />}
               </button>
             ))
           )}

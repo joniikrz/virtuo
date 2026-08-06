@@ -25,11 +25,18 @@ export interface NotificationItem {
   createdAt: string;
 }
 
+export interface TaskNavigationRequest {
+  taskId: string;
+  requestId: number;
+}
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const notificationsEtagRef = useRef('');
+  const taskNavigationSequenceRef = useRef(0);
+  const [taskNavigationRequest, setTaskNavigationRequest] = useState<TaskNavigationRequest | null>(null);
 
   // 1. Verifikimi i sesionit ekzistues (Auto-Login)
   useEffect(() => {
@@ -142,6 +149,11 @@ export default function App() {
     }
   };
 
+  const handleOpenTask = (taskId: string) => {
+    taskNavigationSequenceRef.current += 1;
+    setTaskNavigationRequest({ taskId, requestId: taskNavigationSequenceRef.current });
+  };
+
   // Ekrani gjatë ngarkimit (Loading Screen)
   if (loading) {
     return (
@@ -178,8 +190,13 @@ export default function App() {
             notifications={notifications}
             onMarkAsRead={handleMarkAsRead}
             onMarkAllAsRead={handleMarkAllAsRead}
+            onOpenTask={handleOpenTask}
           />
-          <Dashboard currentUser={user} />
+          <Dashboard
+            currentUser={user}
+            taskNavigationRequest={taskNavigationRequest}
+            onTaskNavigationHandled={() => setTaskNavigationRequest(null)}
+          />
         </>
       ) : (
         <Login onLoginSuccess={(u) => setUser(u)} />
