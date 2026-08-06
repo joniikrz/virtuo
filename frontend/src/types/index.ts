@@ -63,7 +63,7 @@ export interface Task {
   attachments: Attachment[];
   comments: Comment[];
   tags: { id: string; tag: { id: string; name: string; color: string; } }[];
-  _count?: { comments: number; };
+  _count?: { comments: number; attachments?: number; };
 }
 
 export interface Notification {

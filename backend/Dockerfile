@@ -28,4 +28,4 @@ COPY --from=build /app/prisma ./prisma
 
 EXPOSE 5000
 
-CMD ["sh", "-c", "./node_modules/.bin/prisma db push --skip-generate && node dist/index.js"]
+CMD ["node", "dist/index.js"]

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Login from './components/Login';
 import Navbar from './components/Navbar';
 import Dashboard from './components/Dashboard';
@@ -29,6 +29,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const notificationsEtagRef = useRef('');
 
   // 1. Verifikimi i sesionit ekzistues (Auto-Login)
   useEffect(() => {
@@ -56,9 +57,14 @@ export default function App() {
   const fetchNotifications = useCallback(async () => {
     if (!user) return;
     try {
-      const res = await fetch('/api/notifications', { credentials: 'include' });
+      const res = await fetch('/api/notifications', {
+        credentials: 'include',
+        headers: notificationsEtagRef.current ? { 'If-None-Match': notificationsEtagRef.current } : undefined,
+      });
+      if (res.status === 304) return;
       if (res.ok) {
         const data = await readApiJson<{ notifications?: NotificationItem[] }>(res);
+        notificationsEtagRef.current = res.headers.get('ETag') || '';
         setNotifications(data.notifications || []);
       }
     } catch (err) {
@@ -69,6 +75,7 @@ export default function App() {
   useEffect(() => {
     if (!user) {
       setNotifications([]);
+      notificationsEtagRef.current = '';
       return;
     }
 
@@ -76,7 +83,7 @@ export default function App() {
       if (document.visibilityState === 'visible') void fetchNotifications();
     };
     void fetchNotifications();
-    const intervalId = window.setInterval(refreshWhenVisible, 8000);
+    const intervalId = window.setInterval(refreshWhenVisible, 15000);
     window.addEventListener('focus', refreshWhenVisible);
     window.addEventListener('virtuo:data-change', refreshWhenVisible);
     document.addEventListener('visibilitychange', refreshWhenVisible);
@@ -100,6 +107,7 @@ export default function App() {
     } finally {
       setUser(null);
       setNotifications([]);
+      notificationsEtagRef.current = '';
     }
   };
 

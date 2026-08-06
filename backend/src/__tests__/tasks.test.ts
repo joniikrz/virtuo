@@ -32,6 +32,7 @@ vi.mock('../prisma', () => ({
       delete: vi.fn(),
     },
     task: {
+      aggregate: vi.fn(),
       create: vi.fn(),
       findMany: vi.fn(),
       findUnique: vi.fn(),
@@ -40,6 +41,7 @@ vi.mock('../prisma', () => ({
     },
     notification: {
       create: vi.fn(),
+      createMany: vi.fn(),
       deleteMany: vi.fn(),
     },
   },
@@ -83,6 +85,10 @@ describe('Tasks API Tests', () => {
       spaceId: 'space-1',
       createdById: 'test-user-id',
     } as never);
+    vi.mocked(prisma.task.aggregate).mockResolvedValue({
+      _count: { id: 0 },
+      _max: { updatedAt: null },
+    } as never);
     vi.mocked(prisma.spaceMember.count).mockResolvedValue(1);
 
     const res = await request(app)
@@ -124,6 +130,10 @@ describe('Tasks API Tests', () => {
         status: 'IN_PROGRESS',
       },
     ] as never);
+    vi.mocked(prisma.task.aggregate).mockResolvedValue({
+      _count: { id: 2 },
+      _max: { updatedAt: new Date('2026-01-01T00:00:00.000Z') },
+    } as never);
 
     const res = await request(app)
       .get('/api/spaces/space-1/tasks')
@@ -131,6 +141,31 @@ describe('Tasks API Tests', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(2);
+  });
+
+  it('GET /api/spaces/:spaceId/tasks - Kthen 304 kur revision-i nuk ka ndryshuar', async () => {
+    vi.mocked(prisma.space.findUnique).mockResolvedValue({
+      id: 'space-1',
+      name: 'Sprint Board',
+      isPrivate: true,
+    } as never);
+    vi.mocked(prisma.spaceMember.findUnique).mockResolvedValue({
+      id: 'sm-1',
+      spaceId: 'space-1',
+      userId: 'test-user-id',
+    } as never);
+    vi.mocked(prisma.task.aggregate).mockResolvedValue({
+      _count: { id: 2 },
+      _max: { updatedAt: new Date('2026-01-01T00:00:00.000Z') },
+    } as never);
+
+    const res = await request(app)
+      .get('/api/spaces/space-1/tasks')
+      .set('Cookie', [`token=${mockToken}`])
+      .set('If-None-Match', 'W/"tasks-2-1767225600000"');
+
+    expect(res.status).toBe(304);
+    expect(prisma.task.findMany).not.toHaveBeenCalled();
   });
 
   it('PUT /api/tasks/:id/status - Përditëson statusin e kartës (TODO -> COMPLETED)', async () => {
@@ -207,14 +242,14 @@ describe('Tasks API Tests', () => {
       .send({ content: 'Po punoj në të.' });
 
     expect(res.status).toBe(201);
-    expect(prisma.notification.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
+    expect(prisma.notification.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({
         userId: 'assigned-user-id',
         taskId: 'task-1',
         type: 'COMMENT_ADDED',
         resourceType: 'COMMENT',
         resourceId: 'comment-1',
-      }),
+      })],
     });
   });
 

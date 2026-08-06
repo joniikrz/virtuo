@@ -11,6 +11,7 @@ const router = Router({ mergeParams: true });
 const uploadDirectory = path.resolve(process.env.UPLOAD_DIR || 'uploads');
 const validStatuses = new Set(['TODO', 'IN_PROGRESS', 'COMPLETED']);
 const validPriorities = new Set(['LOW', 'NORMAL', 'HIGH', 'URGENT']);
+const taskListLimit = Math.max(50, Math.min(Number(process.env.TASK_LIST_LIMIT) || 500, 2000));
 fs.mkdirSync(uploadDirectory, { recursive: true });
 
 const upload = multer({
@@ -28,7 +29,22 @@ const taskInclude = {
   attachments: { select: { id: true, fileName: true, fileSize: true, mimeType: true, uploadedById: true, uploadedAt: true } },
   comments: { include: { author: { select: { id: true, firstName: true, lastName: true, role: { select: { name: true } } } } }, orderBy: { createdAt: 'asc' } },
   tags: { include: { tag: true } },
-  _count: { select: { comments: true } },
+  _count: { select: { comments: true, attachments: true } },
+} as const;
+
+// Listat e bordit nuk duhet të ngarkojnë historikun e plotë të komenteve dhe skedarëve.
+const taskListInclude = {
+  assignedTo: { select: { id: true, email: true, firstName: true, lastName: true } },
+  assignees: { include: { user: { select: { id: true, email: true, firstName: true, lastName: true } } } },
+  createdBy: { select: { id: true, firstName: true, lastName: true } },
+  tags: { include: { tag: true } },
+  _count: { select: { comments: true, attachments: true } },
+} as const;
+
+const taskAccessInclude = {
+  assignedTo: { select: { id: true, email: true, firstName: true, lastName: true, emailNotifications: true, inAppNotifications: true } },
+  assignees: { include: { user: { select: { id: true, email: true, firstName: true, lastName: true, emailNotifications: true, inAppNotifications: true } } } },
+  createdBy: { select: { id: true, email: true, firstName: true, lastName: true, emailNotifications: true, inAppNotifications: true } },
 } as const;
 
 function validDate(value: unknown): Date | null {
@@ -50,8 +66,10 @@ async function spaceAccess(spaceId: string, userId: string) {
   return { space, isMember, isOwner, canView: isMember };
 }
 
-async function taskAccess(taskId: string, userId: string) {
-  const task = await prisma.task.findUnique({ where: { id: taskId }, include: taskInclude });
+async function taskAccess(taskId: string, userId: string, includeDetails = false) {
+  const task: any = includeDetails
+    ? await prisma.task.findUnique({ where: { id: taskId }, include: taskInclude })
+    : await prisma.task.findUnique({ where: { id: taskId }, include: taskAccessInclude });
   if (!task) return { task: null, canView: false, canManage: false, canChangeStatus: false };
   const access = await spaceAccess(task.spaceId, userId);
   const isCreator = task.createdById === userId;
@@ -65,18 +83,28 @@ async function createAssignmentNotifications(task: any, onlyUserIds?: Set<string
   const assignedUsers = task.assignees?.length
     ? task.assignees.map((assignment: any) => assignment.user)
     : task.assignedTo ? [task.assignedTo] : [];
-  await Promise.all(assignedUsers
-    .filter((user: any) => user.id !== task.createdBy.id && (!onlyUserIds || onlyUserIds.has(user.id)))
-    .map(async (user: any) => {
-      if (user.inAppNotifications) {
-        await prisma.notification.create({
-          data: { userId: user.id, taskId: task.id, type: 'TASK_ASSIGNED', title: 'Detyrë e re', message: `Ju është caktuar detyra: ${task.title}` },
-        });
-      }
-      if (user.emailNotifications) {
-        await sendTaskAssignedEmail(user.email, `${user.firstName} ${user.lastName}`, task.title, `${task.createdBy.firstName} ${task.createdBy.lastName}`, task.deadline);
-      }
-    }));
+  const recipients = assignedUsers.filter((user: any) => user.id !== task.createdBy.id && (!onlyUserIds || onlyUserIds.has(user.id)));
+  const inAppRecipients = recipients.filter((user: any) => user.inAppNotifications);
+  if (inAppRecipients.length) {
+    await prisma.notification.createMany({
+      data: inAppRecipients.map((user: any) => ({
+        userId: user.id,
+        taskId: task.id,
+        type: 'TASK_ASSIGNED',
+        title: 'Detyrë e re',
+        message: `Ju është caktuar detyra: ${task.title}`,
+      })),
+    });
+  }
+  await Promise.all(recipients
+    .filter((user: any) => user.emailNotifications)
+    .map((user: any) => sendTaskAssignedEmail(
+      user.email,
+      `${user.firstName} ${user.lastName}`,
+      task.title,
+      `${task.createdBy.firstName} ${task.createdBy.lastName}`,
+      task.deadline,
+    )));
 }
 
 async function createCompletionNotification(task: any, completedBy: string) {
@@ -113,8 +141,8 @@ async function createTaskActivityNotifications(
   const isComment = activity === 'COMMENT';
 
   try {
-    await Promise.all(recipients.map((recipient) => prisma.notification.create({
-      data: {
+    if (recipients.length) await prisma.notification.createMany({
+      data: recipients.map((recipient) => ({
         userId: recipient.id,
         taskId: task.id,
         type: isComment ? 'COMMENT_ADDED' : 'ATTACHMENT_ADDED',
@@ -124,8 +152,8 @@ async function createTaskActivityNotifications(
           : `${actorName} bashkëngjiti një skedar në detyrën: ${task.title}`,
         resourceType: activity,
         resourceId,
-      },
-    })));
+      })),
+    });
   } catch (error) {
     // Komenti/skedari mbetet funksional edhe nëse shërbimi i njoftimeve ka problem të përkohshëm.
     console.error('Task activity notification error:', error);
@@ -145,14 +173,45 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   const spaceId = req.params.spaceId || (req.query.spaceId as string | undefined);
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
   try {
+    let taskFilter: any = { OR: [{ createdById: userId }, { assignedToId: userId }, { assignees: { some: { userId } } }] };
     if (spaceId) {
       const access = await spaceAccess(spaceId, userId);
       if (!access.canView) return res.status(403).json({ error: 'Nuk keni leje për këtë hapësirë' });
-      const taskFilter = { spaceId, OR: [{ createdById: userId }, { assignedToId: userId }, { assignees: { some: { userId } } }] };
-      return res.json(await prisma.task.findMany({ where: taskFilter, include: taskInclude, orderBy: { createdAt: 'desc' } }));
+      taskFilter = { ...taskFilter, spaceId };
     }
-    return res.json(await prisma.task.findMany({ where: { OR: [{ createdById: userId }, { assignedToId: userId }, { assignees: { some: { userId } } }] }, include: taskInclude, orderBy: { createdAt: 'desc' } }));
+    const revision = await prisma.task.aggregate({
+      where: taskFilter,
+      _count: { id: true },
+      _max: { updatedAt: true },
+    });
+    const etag = `W/"tasks-${revision._count.id}-${revision._max.updatedAt?.getTime() || 0}"`;
+    res.setHeader('ETag', etag);
+    res.setHeader('Cache-Control', 'private, no-cache');
+    if (req.headers['if-none-match'] === etag) return res.status(304).end();
+
+    const tasks = await prisma.task.findMany({
+      where: taskFilter,
+      include: taskListInclude,
+      orderBy: { createdAt: 'desc' },
+      take: taskListLimit,
+    });
+    res.setHeader('X-Result-Limit', String(taskListLimit));
+    return res.json(tasks);
   } catch (error) { console.error('Fetch tasks error:', error); return res.status(500).json({ error: 'Gabim gjatë marrjes së detyrave' }); }
+});
+
+router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
+  try {
+    const access = await taskAccess(req.params.id, userId, true);
+    if (!access.task || !access.canView) return res.status(404).json({ error: 'Detyra nuk u gjet' });
+    res.setHeader('Cache-Control', 'private, no-cache');
+    return res.json(access.task);
+  } catch (error) {
+    console.error('Fetch task detail error:', error);
+    return res.status(500).json({ error: 'Gabim gjatë marrjes së detyrës' });
+  }
 });
 
 router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -211,6 +270,7 @@ router.post('/:id/attachments', authenticateToken, upload.single('file'), async 
       data: { taskId: access.task.id, fileName: req.file.originalname, filePath: req.file.path, fileSize: req.file.size, mimeType: req.file.mimetype, uploadedById: userId },
       select: { id: true, fileName: true, fileSize: true, mimeType: true, uploadedById: true, uploadedAt: true },
     });
+    await prisma.task.update({ where: { id: access.task.id }, data: { updatedAt: new Date() } });
     const actor = access.task.createdById === userId
       ? access.task.createdBy
       : access.task.assignees.find((assignment) => assignment.userId === userId)?.user || access.task.assignedTo;
@@ -247,6 +307,7 @@ router.delete('/:id/attachments/:attachmentId', authenticateToken, async (req: A
     await prisma.$transaction([
       prisma.notification.deleteMany({ where: { resourceType: 'ATTACHMENT', resourceId: attachment.id } }),
       prisma.attachment.delete({ where: { id: attachment.id } }),
+      prisma.task.update({ where: { id: access.task.id }, data: { updatedAt: new Date() } }),
     ]);
     await removeTaskFiles([attachment.filePath]);
     return res.json({ message: 'Skedari u fshi me sukses' });
@@ -270,6 +331,7 @@ router.post('/:id/comments', authenticateToken, async (req: AuthRequest, res: Re
       data: { taskId: access.task.id, authorId: userId, content },
       include: { author: { select: { id: true, firstName: true, lastName: true, role: { select: { name: true } } } } },
     });
+    await prisma.task.update({ where: { id: access.task.id }, data: { updatedAt: new Date() } });
     await createTaskActivityNotifications(
       access.task,
       userId,
@@ -298,6 +360,7 @@ router.delete('/:id/comments/:commentId', authenticateToken, async (req: AuthReq
     await prisma.$transaction([
       prisma.notification.deleteMany({ where: { resourceType: 'COMMENT', resourceId: comment.id } }),
       prisma.comment.delete({ where: { id: comment.id } }),
+      prisma.task.update({ where: { id: access.task.id }, data: { updatedAt: new Date() } }),
     ]);
     return res.json({ message: 'Komenti u fshi me sukses' });
   } catch (error) {

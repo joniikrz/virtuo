@@ -30,6 +30,7 @@ lerna-debug.log*
 # Skedarët e ngarkuar lokalisht (Uploads)
 backend/uploads/
 uploads/
+backups/
 
 # Skedarët e sistemit (OS metadata)
 .DS_Store

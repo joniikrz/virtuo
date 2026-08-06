@@ -1,0 +1,41 @@
+#!/bin/sh
+set -eu
+
+: "${BACKUP_ENCRYPTION_KEY:?Vendos BACKUP_ENCRYPTION_KEY para aktivizimit të backup-it}"
+
+interval="${BACKUP_INTERVAL_SECONDS:-86400}"
+retention_days="${BACKUP_RETENTION_DAYS:-14}"
+mkdir -p /backups
+
+create_backup() {
+  timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  db_dump="/tmp/virtuo-db_${timestamp}.dump"
+  uploads_archive="/tmp/virtuo-uploads_${timestamp}.tar.gz"
+  db_output="/backups/virtuo-db_${timestamp}.dump.enc"
+  uploads_output="/backups/virtuo-uploads_${timestamp}.tar.gz.enc"
+  cleanup_failed_backup() {
+    rm -f "$db_dump" "$uploads_archive" "${db_output}.partial" "${uploads_output}.partial"
+  }
+
+  echo "[Backup] Duke krijuar backup-in ${timestamp}"
+  pg_dump --format=custom --compress=6 --no-owner --no-acl --file="$db_dump" || { cleanup_failed_backup; return 1; }
+  tar -czf "$uploads_archive" -C /uploads . || { cleanup_failed_backup; return 1; }
+
+  openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 -in "$db_dump" -out "${db_output}.partial" -pass env:BACKUP_ENCRYPTION_KEY || { cleanup_failed_backup; return 1; }
+  openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 -in "$uploads_archive" -out "${uploads_output}.partial" -pass env:BACKUP_ENCRYPTION_KEY || { cleanup_failed_backup; return 1; }
+  mv "${db_output}.partial" "$db_output" || { cleanup_failed_backup; return 1; }
+  mv "${uploads_output}.partial" "$uploads_output" || { cleanup_failed_backup; return 1; }
+  sha256sum "$db_output" > "${db_output}.sha256" || return 1
+  sha256sum "$uploads_output" > "${uploads_output}.sha256" || return 1
+  rm -f "$db_dump" "$uploads_archive"
+
+  find /backups -maxdepth 1 -type f -mtime "+${retention_days}" -delete
+  echo "[Backup] Backup-i i enkriptuar u krye me sukses"
+}
+
+while true; do
+  if ! create_backup; then
+    echo "[Backup] Backup-i dështoi; do të provohet përsëri pas ${interval}s" >&2
+  fi
+  sleep "$interval"
+done

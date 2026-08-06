@@ -41,6 +41,8 @@ model User {
   notifications      Notification[]
   activityLogs       ActivityLog[]
 
+  @@index([roleId])
+  @@index([createdAt])
   @@map("users")
 }
 
@@ -58,6 +60,8 @@ model Space {
   members     SpaceMember[]
   tasks       Task[]
 
+  @@index([createdById, name])
+  @@index([createdAt])
   @@map("spaces")
 }
 
@@ -70,6 +74,7 @@ model SpaceMember {
   joinedAt DateTime @default(now()) @map("joined_at")
 
   @@unique([spaceId, userId])
+  @@index([userId, spaceId])
   @@map("space_members")
 }
 
@@ -96,6 +101,11 @@ model Task {
   comments     Comment[]
   tags         TaskTag[]
 
+  @@index([spaceId, updatedAt])
+  @@index([spaceId, status])
+  @@index([createdById, createdAt])
+  @@index([assignedToId, createdAt])
+  @@index([deadline])
   @@map("tasks")
 }
 
@@ -111,6 +121,7 @@ model Attachment {
   uploadedBy   User     @relation(fields: [uploadedById], references: [id])
   uploadedAt   DateTime @default(now()) @map("uploaded_at")
 
+  @@index([taskId, uploadedAt])
   @@map("attachments")
 }
 
@@ -123,6 +134,7 @@ model TaskAssignee {
   assignedAt DateTime @default(now()) @map("assigned_at")
 
   @@unique([taskId, userId])
+  @@index([userId, taskId])
   @@map("task_assignees")
 }
 
@@ -135,6 +147,7 @@ model TaskVisibility {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, userId])
+  @@index([userId, taskId])
   @@map("task_visibility")
 }
 
@@ -147,6 +160,7 @@ model Comment {
   author    User     @relation(fields: [authorId], references: [id])
   createdAt DateTime @default(now()) @map("created_at")
 
+  @@index([taskId, createdAt])
   @@map("comments")
 }
 
@@ -167,6 +181,7 @@ model TaskTag {
   tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, tagId])
+  @@index([tagId, taskId])
   @@map("task_tags")
 }
 
@@ -184,6 +199,8 @@ model Notification {
   createdAt    DateTime @default(now()) @map("created_at")
 
   @@index([resourceType, resourceId])
+  @@index([userId, isRead, createdAt])
+  @@index([taskId])
   @@map("notifications")
 }
 

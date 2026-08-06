@@ -17,14 +17,27 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response): Prom
   }
 
   try {
+    const [latestNotification, unreadCount, totalCount] = await prisma.$transaction([
+      prisma.notification.findFirst({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, createdAt: true },
+      }),
+      prisma.notification.count({ where: { userId, isRead: false } }),
+      prisma.notification.count({ where: { userId } }),
+    ]);
+    const etag = `W/"notifications-${latestNotification?.id || 'none'}-${unreadCount}-${totalCount}"`;
+    res.setHeader('ETag', etag);
+    res.setHeader('Cache-Control', 'private, no-cache');
+    if (req.headers['if-none-match'] === etag) {
+      res.status(304).end();
+      return;
+    }
+
     const notifications = await prisma.notification.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 50,
-    });
-
-    const unreadCount = await prisma.notification.count({
-      where: { userId, isRead: false },
     });
 
     res.json({
@@ -51,21 +64,16 @@ router.patch('/:id/read', authenticateToken, async (req: AuthRequest, res: Respo
   }
 
   try {
-    const notification = await prisma.notification.findUnique({
-      where: { id: notificationId },
-    });
-
-    if (!notification || notification.userId !== userId) {
-      res.status(404).json({ error: 'Njoftimi nuk u gjet' });
-      return;
-    }
-
-    const updated = await prisma.notification.update({
-      where: { id: notificationId },
+    const updated = await prisma.notification.updateMany({
+      where: { id: notificationId, userId, isRead: false },
       data: { isRead: true },
     });
 
-    res.json(updated);
+    if (updated.count === 0) {
+      res.status(404).json({ error: 'Njoftimi nuk u gjet' });
+      return;
+    }
+    res.json({ id: notificationId, isRead: true });
   } catch (error) {
     console.error('Mark notification read error:', error);
     res.status(500).json({ error: 'Ndodhi një gabim' });

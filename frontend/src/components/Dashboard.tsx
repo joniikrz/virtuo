@@ -32,10 +32,8 @@ const taskDataRevision = (spaceId: string, tasks: Task[]) => `${spaceId}|${tasks
   task.id,
   task.updatedAt || '',
   task.status,
-  task.comments?.length || 0,
-  task.comments?.[task.comments.length - 1]?.id || '',
-  task.attachments?.length || 0,
-  task.attachments?.[task.attachments.length - 1]?.id || '',
+  task._count?.comments || 0,
+  task._count?.attachments || 0,
 ].join(':')).join('|')}`;
 
 export default function Dashboard({ currentUser }: DashboardProps) {
@@ -64,6 +62,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
   const [taskFilters, setTaskFilters] = useState<TaskFiltersState>(DEFAULT_TASK_FILTERS);
   const activeSpaceIdRef = useRef<string | null>(null);
   const tasksRevisionRef = useRef('');
+  const taskEtagsRef = useRef<Record<string, string>>({});
   activeSpaceIdRef.current = activeSpace?.id || null;
 
   const filteredTasks = useMemo(() => {
@@ -142,21 +141,44 @@ export default function Dashboard({ currentUser }: DashboardProps) {
 
   const fetchTasks = useCallback(async (spaceId: string) => {
     try {
-      const res = await fetch(`/api/spaces/${spaceId}/tasks`, { cache: 'no-store' });
+      const etag = taskEtagsRef.current[spaceId];
+      const res = await fetch(`/api/spaces/${spaceId}/tasks`, {
+        cache: 'no-store',
+        headers: etag ? { 'If-None-Match': etag } : undefined,
+      });
+      if (res.status === 304) return;
       if (res.ok) {
         const data: Task[] = await res.json();
         if (activeSpaceIdRef.current !== spaceId) return;
+        const nextEtag = res.headers.get('ETag');
+        if (nextEtag) taskEtagsRef.current[spaceId] = nextEtag;
         const revision = taskDataRevision(spaceId, data);
         if (tasksRevisionRef.current === revision) return;
         tasksRevisionRef.current = revision;
         setTasks(data);
         setSelectedTask((current) => {
           if (!current) return null;
-          return data.find((task) => task.id === current.id) || null;
+          return data.some((task) => task.id === current.id) ? current : null;
         });
       }
     } catch (err) { console.error(err); }
   }, []);
+
+  const fetchTaskDetail = useCallback(async (taskId: string): Promise<Task | null> => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, { cache: 'no-store' });
+      if (!res.ok) return null;
+      return await res.json() as Task;
+    } catch (error) {
+      console.error('Gabim gjatë marrjes së detajeve të detyrës:', error);
+      return null;
+    }
+  }, []);
+
+  const handleTaskClick = useCallback(async (task: Task) => {
+    const detailedTask = await fetchTaskDetail(task.id);
+    if (detailedTask) setSelectedTask(detailedTask);
+  }, [fetchTaskDetail]);
 
   const fetchSpaceMembers = async (spaceId: string) => {
     try {
@@ -201,7 +223,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') void refresh();
     };
-    const intervalId = window.setInterval(() => void refresh(), 5000);
+    const intervalId = window.setInterval(() => void refresh(), 10000);
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
@@ -210,6 +232,24 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [activeSpace, fetchTasks]);
+
+  useEffect(() => {
+    const taskId = selectedTask?.id;
+    if (!taskId) return;
+    let requestInFlight = false;
+    const refreshDetail = async () => {
+      if (requestInFlight || document.visibilityState !== 'visible') return;
+      requestInFlight = true;
+      try {
+        const detailedTask = await fetchTaskDetail(taskId);
+        if (detailedTask) setSelectedTask((current) => current?.id === taskId ? detailedTask : current);
+      } finally {
+        requestInFlight = false;
+      }
+    };
+    const intervalId = window.setInterval(() => void refreshDetail(), 7000);
+    return () => window.clearInterval(intervalId);
+  }, [selectedTask?.id, fetchTaskDetail]);
 
   // Handlers
   const handleCreateSpace = async (name: string, memberIds: string[]) => {
@@ -349,7 +389,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       if (selectedTask && selectedTask.id === taskId) {
         const updatedTask = { ...selectedTask, attachments: [...(selectedTask.attachments || []), data] };
         setSelectedTask(updatedTask);
-        setTasks(tasks.map(t => t.id === taskId ? updatedTask : t));
+        setTasks((current) => current.map((task) => task.id === taskId ? updatedTask : task));
       }
       setSuccessMsg('Skedari u ngarkua me sukses.');
     } catch (err: any) {
@@ -508,7 +548,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
               onChange={setTaskFilters}
             />
 
-            <TaskBoard tasks={filteredTasks} statusFilter={taskFilters.status} onTaskClick={setSelectedTask} />
+            <TaskBoard tasks={filteredTasks} statusFilter={taskFilters.status} onTaskClick={handleTaskClick} />
           </>
         ) : (
           <div className="empty-state dashboard-empty">

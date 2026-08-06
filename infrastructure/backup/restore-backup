@@ -1,0 +1,30 @@
+#!/bin/sh
+set -eu
+
+: "${BACKUP_ENCRYPTION_KEY:?Mungon BACKUP_ENCRYPTION_KEY}"
+: "${RESTORE_CONFIRM:?Vendos RESTORE_CONFIRM=YES për rikthim}"
+[ "$RESTORE_CONFIRM" = "YES" ] || { echo "RESTORE_CONFIRM duhet të jetë YES" >&2; exit 1; }
+
+kind="${1:-}"
+source_file="${2:-}"
+[ -f "$source_file" ] || { echo "Skedari i backup-it nuk u gjet" >&2; exit 1; }
+if [ -f "${source_file}.sha256" ]; then
+  sha256sum -c "${source_file}.sha256"
+fi
+
+case "$kind" in
+  db)
+    openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in "$source_file" -pass env:BACKUP_ENCRYPTION_KEY \
+      | pg_restore --clean --if-exists --no-owner --no-acl --dbname="$PGDATABASE"
+    ;;
+  uploads)
+    openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in "$source_file" -pass env:BACKUP_ENCRYPTION_KEY \
+      | tar -xzf - -C /uploads
+    ;;
+  *)
+    echo "Përdorimi: restore-backup db|uploads /backups/skedari.enc" >&2
+    exit 1
+    ;;
+esac
+
+echo "[Restore] Rikthimi u krye me sukses"
