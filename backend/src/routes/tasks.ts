@@ -155,6 +155,7 @@ async function createAssignmentNotifications(task: any, onlyUserIds?: Set<string
       task.title,
       `${task.createdBy.firstName} ${task.createdBy.lastName}`,
       task.deadline,
+      task.id,
     )))
     .catch((error) => console.error('Background task assignment email error:', error));
 }
@@ -175,6 +176,7 @@ async function createCompletionNotification(task: any, completedBy: string) {
       `${task.createdBy.firstName} ${task.createdBy.lastName}`,
       task.title,
       completedByNames,
+      task.id,
     ).catch((error) => console.error('Background task completion email error:', error));
   }
 }

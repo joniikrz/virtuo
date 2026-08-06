@@ -158,6 +158,7 @@ describe('Tasks API Tests', () => {
       'Task me email',
       'Test User',
       expect.any(Date),
+      'task-email-1',
     );
   });
 

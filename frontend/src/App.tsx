@@ -158,6 +158,24 @@ export default function App() {
     setTaskNavigationRequest({ taskId, notificationId, requestId: taskNavigationSequenceRef.current });
   };
 
+  useEffect(() => {
+    if (!user) return;
+    const currentUrl = new URL(window.location.href);
+    const linkedTaskId = currentUrl.searchParams.get('task')?.trim() || '';
+    if (!/^[A-Za-z0-9_-]{1,100}$/.test(linkedTaskId)) return;
+
+    taskNavigationSequenceRef.current += 1;
+    setTaskNavigationRequest({
+      taskId: linkedTaskId,
+      notificationId: '',
+      requestId: taskNavigationSequenceRef.current,
+    });
+
+    // Konsumo deep-link-un që refresh-i të mos e hapë detyrën përsëri pa kërkesë.
+    currentUrl.searchParams.delete('task');
+    window.history.replaceState({}, '', `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`);
+  }, [user]);
+
   const handleSpaceInviteResponse = async (inviteId: string, action: 'accept' | 'reject', notificationId: string): Promise<string> => {
     const response = await fetch(`/api/spaces/invitations/${inviteId}/${action}`, {
       method: 'POST',
@@ -172,6 +190,7 @@ export default function App() {
   };
 
   const handleUnavailableNotification = useCallback(async (notificationId: string) => {
+    if (!notificationId) return;
     setNotifications((current) => current.filter((notification) => notification.id !== notificationId));
     notificationsEtagRef.current = '';
     try {

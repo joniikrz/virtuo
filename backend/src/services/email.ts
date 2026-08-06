@@ -62,10 +62,35 @@ function safeSubject(value: string): string {
   return value.replace(/[\r\n]+/g, ' ').trim().slice(0, 180);
 }
 
+export function buildTaskUrl(taskId: string, configuredFrontendUrl = process.env.FRONTEND_URL || ''): string {
+  const firstConfiguredUrl = configuredFrontendUrl.split(',')[0]?.trim();
+  if (!firstConfiguredUrl || !/^[A-Za-z0-9_-]{1,100}$/.test(taskId)) return '';
+
+  try {
+    const url = new URL(firstConfiguredUrl);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return '';
+    url.searchParams.set('task', taskId);
+    return url.toString();
+  } catch {
+    return '';
+  }
+}
+
+function taskButton(taskId: string): string {
+  const taskUrl = buildTaskUrl(taskId);
+  if (!taskUrl) return '';
+  return `
+    <p style="margin: 24px 0; text-align: center;">
+      <a href="${escapeHtml(taskUrl)}" style="display: inline-block; padding: 12px 20px; color: #ffffff; background: #6d4aff; border-radius: 8px; font-weight: 700; text-decoration: none;">Hape detyrën në Virtuo</a>
+    </p>
+    <p style="font-size: 12px; color: #777; word-break: break-all;">Nëse butoni nuk hapet, përdor këtë link:<br><a href="${escapeHtml(taskUrl)}">${escapeHtml(taskUrl)}</a></p>
+  `;
+}
+
 /**
  * Dërgon një njoftim me email kur një punonjësi i caktohet një detyrë e re.
  */
-export async function sendTaskAssignedEmail(toEmail: string, employeeName: string, taskTitle: string, creatorName: string, deadline: Date): Promise<boolean> {
+export async function sendTaskAssignedEmail(toEmail: string, employeeName: string, taskTitle: string, creatorName: string, deadline: Date, taskId: string): Promise<boolean> {
   if (!transporter) {
     logMissingConfigurationOnce();
     return false;
@@ -94,6 +119,7 @@ export async function sendTaskAssignedEmail(toEmail: string, employeeName: strin
             <p style="margin-bottom: 0; font-size: 14px; color: #666;"><strong>Afati i fundit:</strong> ${formattedDeadline}</p>
           </div>
           <p>Ju lutemi hyni në sistem për të parë detajet dhe për të filluar punën.</p>
+          ${taskButton(taskId)}
           <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
           <p style="font-size: 12px; color: #999; text-align: center;">Ky është një email automatik nga sistemi Virtuo. Ju lutemi mos u përgjigjni.</p>
         </div>
@@ -110,7 +136,7 @@ export async function sendTaskAssignedEmail(toEmail: string, employeeName: strin
 /**
  * Dërgon një njoftim me email te menaxheri kur punonjësi përfundon një detyrë.
  */
-export async function sendTaskCompletedEmail(toEmail: string, managerName: string, taskTitle: string, employeeName: string): Promise<boolean> {
+export async function sendTaskCompletedEmail(toEmail: string, managerName: string, taskTitle: string, employeeName: string, taskId: string): Promise<boolean> {
   if (!transporter) {
     logMissingConfigurationOnce();
     return false;
@@ -133,6 +159,7 @@ export async function sendTaskCompletedEmail(toEmail: string, managerName: strin
             <h3 style="margin-top: 0; color: #333;">${safeTaskTitle}</h3>
           </div>
           <p>Ju lutemi hyni në sistemin Virtuo për të rishikuar punën e kryer dhe shtojcat nëse ka.</p>
+          ${taskButton(taskId)}
           <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
           <p style="font-size: 12px; color: #999; text-align: center;">Ky është një email automatik nga sistemi Virtuo. Ju lutemi mos u përgjigjni.</p>
         </div>

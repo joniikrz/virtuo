@@ -186,8 +186,11 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
       try {
         const taskResponse = await fetch(`/api/tasks/${taskNavigationRequest.taskId}`, { cache: 'no-store' });
         if (taskResponse.status === 404) {
-          onTaskNavigationUnavailable(taskNavigationRequest.notificationId);
-          throw new Error('Kjo detyrë është fshirë. Njoftimi i vjetër u hoq automatikisht.');
+          if (taskNavigationRequest.notificationId) {
+            onTaskNavigationUnavailable(taskNavigationRequest.notificationId);
+            throw new Error('Kjo detyrë është fshirë. Njoftimi i vjetër u hoq automatikisht.');
+          }
+          throw new Error('Detyra nuk u gjet ose nuk ke më qasje në të.');
         }
         if (!taskResponse.ok) throw new Error('Detyra nuk mund të ngarkohet tani. Provo përsëri.');
         const detailedTask = await taskResponse.json() as Task;
