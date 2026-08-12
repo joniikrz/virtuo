@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { BellRing, History, KeyRound, Lock, Save, UserRound, UsersRound, X } from 'lucide-react';
 import { User } from '../types';
-import { apiErrorMessage, readApiJson } from '../lib/api';
+import { apiErrorMessage, apiFetch, readApiJson } from '../lib/api';
 
 type SettingsTab = 'account' | 'security' | 'activity' | 'notifications' | 'users';
 
@@ -29,7 +29,7 @@ const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
 ];
 
 async function apiRequest<T>(url: string, method: string, body?: unknown): Promise<T> {
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     method,
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     credentials: 'include',

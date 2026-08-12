@@ -24,6 +24,7 @@ export default function TaskCard({ task, onClick }: TaskCardProps) {
       <h4 className="task-card-title" style={{ textDecoration: isCompleted ? 'line-through' : 'none' }}>
         {task.title}
       </h4>
+      {task.space && <span className="task-card-space"><span style={{ backgroundColor: task.space.color || '#7048e8' }} />{task.space.name}</span>}
       {task.description && <p className="task-card-description">{task.description}</p>}
       
       {/* Priority & Tags can go here later */}

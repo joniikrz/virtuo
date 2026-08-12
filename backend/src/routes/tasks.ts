@@ -84,6 +84,7 @@ const taskInclude = {
 
 // Listat e bordit nuk duhet të ngarkojnë historikun e plotë të komenteve dhe skedarëve.
 const taskListInclude = {
+  space: { select: { id: true, name: true, color: true } },
   assignedTo: { select: { id: true, email: true, firstName: true, lastName: true } },
   assignees: { include: { user: { select: { id: true, email: true, firstName: true, lastName: true } } } },
   createdBy: { select: { id: true, firstName: true, lastName: true } },
@@ -236,7 +237,10 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   const spaceId = req.params.spaceId || (req.query.spaceId as string | undefined);
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
   try {
-    let taskFilter: any = { OR: [{ createdById: userId }, { assignedToId: userId }, { assignees: { some: { userId } } }] };
+    const assignedOnly = req.query.scope === 'assigned';
+    let taskFilter: any = assignedOnly
+      ? { OR: [{ assignedToId: userId }, { assignees: { some: { userId } } }] }
+      : { OR: [{ createdById: userId }, { assignedToId: userId }, { assignees: { some: { userId } } }] };
     if (spaceId) {
       const access = await spaceAccess(spaceId, userId);
       if (!access.canView) return res.status(403).json({ error: 'Nuk keni leje për këtë hapësirë' });

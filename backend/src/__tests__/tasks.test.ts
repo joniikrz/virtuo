@@ -236,6 +236,27 @@ describe('Tasks API Tests', () => {
     expect(res.body).toHaveLength(2);
   });
 
+  it('GET /api/tasks?scope=assigned - Bashkon vetëm detyrat e caktuara përdoruesit nga të gjitha hapësirat', async () => {
+    vi.mocked(prisma.task.aggregate).mockResolvedValue({
+      _count: { id: 1 },
+      _max: { updatedAt: new Date('2026-08-12T10:00:00.000Z') },
+    } as never);
+    vi.mocked(prisma.task.findMany).mockResolvedValue([{
+      id: 'task-mine', title: 'Detyra ime', status: 'TODO', spaceId: 'space-2',
+      space: { id: 'space-2', name: 'Marketing', color: '#7048e8' },
+    }] as never);
+
+    const res = await request(app)
+      .get('/api/tasks?scope=assigned')
+      .set('Cookie', [`token=${mockToken}`]);
+
+    expect(res.status).toBe(200);
+    expect(res.body[0].space.name).toBe('Marketing');
+    expect(prisma.task.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { OR: [{ assignedToId: 'test-user-id' }, { assignees: { some: { userId: 'test-user-id' } } }] },
+    }));
+  });
+
   it('GET /api/spaces/:spaceId/tasks - Kthen 304 kur revision-i nuk ka ndryshuar', async () => {
     vi.mocked(prisma.space.findUnique).mockResolvedValue({
       id: 'space-1',

@@ -50,6 +50,7 @@ export interface Comment {
 export interface Task {
   id: string;
   spaceId: string;
+  space?: { id: string; name: string; color?: string };
   title: string;
   description: string;
   status: string;

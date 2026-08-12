@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { User, Space, Task } from '../types';
-import { LockKeyhole, Plus, ShieldCheck, Trash2, UserPlus, Users, X } from 'lucide-react';
+import { ListChecks, LockKeyhole, Plus, ShieldCheck, Trash2, UserPlus, Users, X } from 'lucide-react';
 import SpaceSidebar from './SpaceSidebar';
 import TaskBoard from './TaskBoard';
 import TaskDetailModal from './TaskDetailModal';
@@ -12,7 +12,7 @@ import RegisterUserModal from './RegisterUserModal';
 import StatsPanel from './StatsPanel';
 import TaskFilters, { DEFAULT_TASK_FILTERS, TaskFiltersState } from './TaskFilters';
 import type { TaskNavigationRequest } from '../App';
-import { apiErrorMessage, readApiJson } from '../lib/api';
+import { apiErrorMessage, apiFetch, readApiJson } from '../lib/api';
 
 interface DashboardProps {
   currentUser: User;
@@ -46,6 +46,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
 
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [activeSpace, setActiveSpace] = useState<Space | null>(null);
+  const [isMyTasks, setIsMyTasks] = useState(true);
   const isSpaceOwner = Boolean(activeSpace && activeSpace.createdBy?.id === currentUser.id);
   const canManageActiveSpace = isSpaceOwner;
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -67,7 +68,14 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
   const activeSpaceIdRef = useRef<string | null>(null);
   const tasksRevisionRef = useRef('');
   const taskEtagsRef = useRef<Record<string, string>>({});
-  activeSpaceIdRef.current = activeSpace?.id || null;
+  activeSpaceIdRef.current = isMyTasks ? '__my_tasks__' : activeSpace?.id || null;
+
+  const myTaskMembers = useMemo(() => {
+    const users = tasks.flatMap((task) => task.assignees?.length
+      ? task.assignees.map((assignment) => assignment.user)
+      : task.assignedTo ? [task.assignedTo] : []);
+    return [...new Map(users.map((user) => [user.id, user])).values()] as User[];
+  }, [tasks]);
 
   const filteredTasks = useMemo(() => {
     const now = new Date();
@@ -118,9 +126,9 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
   }, [tasks, taskFilters, currentUser.id]);
 
   // Fetching Logic
-  const fetchSpaces = async () => {
+  const fetchSpaces = useCallback(async () => {
     try {
-      const res = await fetch('/api/spaces');
+      const res = await apiFetch('/api/spaces');
       if (res.ok) {
         const data = await res.json();
         setSpaces(data);
@@ -131,12 +139,12 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
         });
       }
     } catch (err) { console.error(err); }
-  };
+  }, []);
 
   const fetchTasks = useCallback(async (spaceId: string) => {
     try {
       const etag = taskEtagsRef.current[spaceId];
-      const res = await fetch(`/api/spaces/${spaceId}/tasks`, {
+      const res = await apiFetch(`/api/spaces/${spaceId}/tasks`, {
         cache: 'no-store',
         headers: etag ? { 'If-None-Match': etag } : undefined,
       });
@@ -158,9 +166,32 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
     } catch (err) { console.error(err); }
   }, []);
 
+  const fetchMyTasks = useCallback(async () => {
+    try {
+      const viewKey = '__my_tasks__';
+      const etag = taskEtagsRef.current[viewKey];
+      const res = await apiFetch('/api/tasks?scope=assigned', {
+        cache: 'no-store',
+        headers: etag ? { 'If-None-Match': etag } : undefined,
+      });
+      if (res.status === 304) return;
+      if (!res.ok || activeSpaceIdRef.current !== viewKey) return;
+      const data = await readApiJson<Task[]>(res);
+      const nextEtag = res.headers.get('ETag');
+      if (nextEtag) taskEtagsRef.current[viewKey] = nextEtag;
+      const revision = taskDataRevision(viewKey, data);
+      if (tasksRevisionRef.current === revision) return;
+      tasksRevisionRef.current = revision;
+      setTasks(data);
+      setSelectedTask((current) => current && data.some((task) => task.id === current.id) ? current : null);
+    } catch (error) {
+      console.error('Gabim gjatë marrjes së detyrave të mia:', error);
+    }
+  }, []);
+
   const fetchTaskDetail = useCallback(async (taskId: string): Promise<Task | null> => {
     try {
-      const res = await fetch(`/api/tasks/${taskId}`, { cache: 'no-store' });
+      const res = await apiFetch(`/api/tasks/${taskId}`, { cache: 'no-store' });
       if (!res.ok) return null;
       return await res.json() as Task;
     } catch (error) {
@@ -168,11 +199,6 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
       return null;
     }
   }, []);
-
-  const handleTaskClick = useCallback(async (task: Task) => {
-    const detailedTask = await fetchTaskDetail(task.id);
-    if (detailedTask) setSelectedTask(detailedTask);
-  }, [fetchTaskDetail]);
 
   useEffect(() => {
     if (!taskNavigationRequest) return;
@@ -184,7 +210,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
       setSelectedTask(null);
       setShowEditTask(false);
       try {
-        const taskResponse = await fetch(`/api/tasks/${taskNavigationRequest.taskId}`, { cache: 'no-store' });
+        const taskResponse = await apiFetch(`/api/tasks/${taskNavigationRequest.taskId}`, { cache: 'no-store' });
         if (taskResponse.status === 404) {
           if (taskNavigationRequest.notificationId) {
             onTaskNavigationUnavailable(taskNavigationRequest.notificationId);
@@ -198,7 +224,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
         let availableSpaces = spaces;
         let targetSpace = availableSpaces.find((space) => space.id === detailedTask.spaceId);
         if (!targetSpace) {
-          const response = await fetch('/api/spaces', { cache: 'no-store' });
+          const response = await apiFetch('/api/spaces', { cache: 'no-store' });
           if (!response.ok) throw new Error('Hapësira e detyrës nuk mund të ngarkohet.');
           availableSpaces = await response.json() as Space[];
           targetSpace = availableSpaces.find((space) => space.id === detailedTask.spaceId);
@@ -208,6 +234,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
 
         if (!cancelled) {
           setActiveSpace(targetSpace);
+          setIsMyTasks(false);
           setSelectedTask(detailedTask);
           setTaskFilters(DEFAULT_TASK_FILTERS);
         }
@@ -222,46 +249,60 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
     return () => { cancelled = true; };
   }, [taskNavigationRequest?.requestId]);
 
-  const fetchSpaceMembers = async (spaceId: string) => {
+  const fetchSpaceMembers = useCallback(async (spaceId: string) => {
     try {
-      const res = await fetch(`/api/spaces/${spaceId}/members`);
+      const res = await apiFetch(`/api/spaces/${spaceId}/members`);
       if (res.ok) {
         const data = await res.json();
         setSpaceMembers(data);
       }
     } catch (err) { console.error(err); }
-  };
+  }, []);
 
   useEffect(() => {
     void fetchSpaces();
-  }, []);
+  }, [fetchSpaces]);
 
   useEffect(() => {
     const refreshSpaces = () => void fetchSpaces();
     window.addEventListener('virtuo:data-change', refreshSpaces);
     return () => window.removeEventListener('virtuo:data-change', refreshSpaces);
-  }, []);
+  }, [fetchSpaces]);
 
   useEffect(() => {
-    if (activeSpace) {
-      tasksRevisionRef.current = '';
-      setTaskFilters(DEFAULT_TASK_FILTERS);
+    const refreshTasks = () => {
+      const viewKey = isMyTasks ? '__my_tasks__' : activeSpace?.id || '';
+      if (viewKey) taskEtagsRef.current[viewKey] = '';
+      if (isMyTasks) void fetchMyTasks();
+      else if (activeSpace) void fetchTasks(activeSpace.id);
+    };
+    window.addEventListener('virtuo:data-change', refreshTasks);
+    return () => window.removeEventListener('virtuo:data-change', refreshTasks);
+  }, [activeSpace, isMyTasks, fetchMyTasks, fetchTasks]);
+
+  useEffect(() => {
+    tasksRevisionRef.current = '';
+    setTaskFilters(DEFAULT_TASK_FILTERS);
+    if (isMyTasks) {
+      void fetchMyTasks();
+    } else if (activeSpace) {
       void fetchTasks(activeSpace.id);
       void fetchSpaceMembers(activeSpace.id);
     } else {
       setTasks([]);
       setSelectedTask(null);
     }
-  }, [activeSpace, fetchTasks]);
+  }, [activeSpace, isMyTasks, fetchTasks, fetchMyTasks, fetchSpaceMembers]);
 
   useEffect(() => {
-    if (!activeSpace) return;
+    if (!isMyTasks && !activeSpace) return;
     let requestInFlight = false;
     const refresh = async () => {
       if (requestInFlight || document.visibilityState !== 'visible') return;
       requestInFlight = true;
       try {
-        await fetchTasks(activeSpace.id);
+        if (isMyTasks) await fetchMyTasks();
+        else if (activeSpace) await fetchTasks(activeSpace.id);
       } finally {
         requestInFlight = false;
       }
@@ -278,7 +319,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [activeSpace, fetchTasks]);
+  }, [activeSpace, isMyTasks, fetchTasks, fetchMyTasks]);
 
   useEffect(() => {
     const taskId = selectedTask?.id;
@@ -302,7 +343,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
   const handleCreateSpace = async (name: string) => {
     setErrorMsg('');
     try {
-      const res = await fetch('/api/spaces', {
+      const res = await apiFetch('/api/spaces', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
@@ -324,7 +365,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
     setErrorMsg('');
     if (!activeSpace) return;
     try {
-      const res = await fetch(`/api/spaces/${activeSpace.id}/invitations`, {
+      const res = await apiFetch(`/api/spaces/${activeSpace.id}/invitations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -344,7 +385,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
     setErrorMsg('');
     if (!activeSpace) return;
     try {
-      const res = await fetch(`/api/spaces/${activeSpace.id}/tasks`, {
+      const res = await apiFetch(`/api/spaces/${activeSpace.id}/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(taskData),
@@ -366,7 +407,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
     setErrorMsg('');
     if (!selectedTask) return;
     try {
-      const res = await fetch(`/api/tasks/${selectedTask.id}`, {
+      const res = await apiFetch(`/api/tasks/${selectedTask.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(taskData),
@@ -387,7 +428,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
   const handleRegisterUser = async (userData: any) => {
     setErrorMsg('');
     try {
-      const res = await fetch('/api/auth/register-user', {
+      const res = await apiFetch('/api/auth/register-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),
@@ -404,7 +445,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
 
   const handleStatusChange = async (taskId: string, newStatus: string) => {
     try {
-      const res = await fetch(`/api/tasks/${taskId}/status`, {
+      const res = await apiFetch(`/api/tasks/${taskId}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
@@ -425,7 +466,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const res = await fetch(`/api/tasks/${taskId}/attachments`, {
+      const res = await apiFetch(`/api/tasks/${taskId}/attachments`, {
         method: 'POST',
         body: formData,
       });
@@ -445,11 +486,19 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
     }
   };
 
+  const handleTaskClick = useCallback(async (task: Task) => {
+    const detailedTask = await fetchTaskDetail(task.id);
+    if (detailedTask) {
+      await fetchSpaceMembers(detailedTask.spaceId);
+      setSelectedTask(detailedTask);
+    }
+  }, [fetchTaskDetail, fetchSpaceMembers]);
+
   const handleRemoveMember = async (userId: string) => {
     if (!activeSpace) return;
     setErrorMsg('');
     try {
-      const res = await fetch(`/api/spaces/${activeSpace.id}/members/${userId}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/spaces/${activeSpace.id}/members/${userId}`, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       await Promise.all([fetchSpaceMembers(activeSpace.id), fetchSpaces()]);
@@ -461,7 +510,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
 
   const handleAddComment = async (taskId: string, content: string) => {
     setErrorMsg('');
-    const res = await fetch(`/api/tasks/${taskId}/comments`, {
+    const res = await apiFetch(`/api/tasks/${taskId}/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content }),
@@ -476,7 +525,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
 
   const handleDeleteComment = async (taskId: string, commentId: string) => {
     if (!window.confirm('A dëshiron ta fshish këtë koment?')) return;
-    const res = await fetch(`/api/tasks/${taskId}/comments/${commentId}`, { method: 'DELETE' });
+    const res = await apiFetch(`/api/tasks/${taskId}/comments/${commentId}`, { method: 'DELETE' });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Komenti nuk u fshi');
     const updateTask = (task: Task) => task.id === taskId
@@ -490,7 +539,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
 
   const handleDeleteAttachment = async (taskId: string, attachmentId: string) => {
     if (!window.confirm('A dëshiron ta fshish këtë skedar?')) return;
-    const res = await fetch(`/api/tasks/${taskId}/attachments/${attachmentId}`, { method: 'DELETE' });
+    const res = await apiFetch(`/api/tasks/${taskId}/attachments/${attachmentId}`, { method: 'DELETE' });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Skedari nuk u fshi');
     const updateTask = (task: Task) => task.id === taskId
@@ -504,7 +553,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
 
   const handleDeleteTask = async (taskId: string) => {
     if (!window.confirm('A dëshiron ta fshish këtë detyrë?')) return;
-    const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+    const res = await apiFetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Detyra nuk u fshi');
     setTasks((current) => current.filter((task) => task.id !== taskId));
@@ -517,7 +566,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
   const handleDeleteSpace = async () => {
     if (!activeSpace || !window.confirm(`A dëshiron ta fshish hapësirën "${activeSpace.name}" dhe të gjitha detyrat e saj?`)) return;
     const spaceId = activeSpace.id;
-    const res = await fetch(`/api/spaces/${spaceId}`, { method: 'DELETE' });
+    const res = await apiFetch(`/api/spaces/${spaceId}`, { method: 'DELETE' });
     const data = await res.json();
     if (!res.ok) { setErrorMsg(data.error || 'Hapësira nuk u fshi'); return; }
     setSpaces((current) => current.filter((space) => space.id !== spaceId));
@@ -532,9 +581,11 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
       
       <SpaceSidebar 
         spaces={spaces}
-        activeSpace={activeSpace}
+        activeSpace={isMyTasks ? null : activeSpace}
         isAdmin={isAdmin}
-        onSelectSpace={setActiveSpace}
+        isMyTasks={isMyTasks}
+        onShowMyTasks={() => { setIsMyTasks(true); setSelectedTask(null); setShowEditTask(false); }}
+        onSelectSpace={(space) => { setIsMyTasks(false); setActiveSpace(space); setSelectedTask(null); setShowEditTask(false); }}
         onShowCreateSpace={() => { setErrorMsg(''); setShowCreateSpace(true); }}
         onShowRegisterUser={() => { setErrorMsg(''); setShowRegisterUser(true); }}
       />
@@ -549,7 +600,21 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
           </div>
         )}
 
-        {activeSpace ? (
+        {isMyTasks ? (
+          <>
+            <div className="content-header workspace-hero my-tasks-hero">
+              <div className="space-info">
+                <span className="workspace-hero__eyebrow"><ListChecks size={14} /> Pamje e përbashkët</span>
+                <h1>Detyrat e mia</h1>
+                <div className="workspace-hero__meta"><span>Task-et që të janë caktuar në të gjitha hapësirat</span><span className="workspace-hero__separator" /><span>{spaces.length} hapësira të qasshme</span></div>
+              </div>
+            </div>
+
+            <StatsPanel tasks={tasks} membersCount={myTaskMembers.length} />
+            <TaskFilters tasks={tasks} members={myTaskMembers} filters={taskFilters} resultCount={filteredTasks.length} onChange={setTaskFilters} />
+            <TaskBoard tasks={filteredTasks} statusFilter={taskFilters.status} onTaskClick={handleTaskClick} />
+          </>
+        ) : activeSpace ? (
           <>
             <div className="content-header workspace-hero">
               <div className="space-info">
@@ -659,7 +724,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
         />
       )}
 
-      {selectedTask && (
+      {selectedTask && !showEditTask && (
         <TaskDetailModal
           key={selectedTask.id}
           task={selectedTask}

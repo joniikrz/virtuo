@@ -1,5 +1,20 @@
 type ErrorPayload = { error?: string };
 
+export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const response = await fetch(input, { credentials: 'include', ...init });
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.pathname : input.url;
+  const isSessionEndpoint = url.includes('/api/auth/login')
+    || url.includes('/api/auth/register')
+    || url.includes('/api/auth/setup')
+    || url.includes('/api/auth/forgot-password')
+    || url.includes('/api/auth/reset-password')
+    || url.includes('/api/auth/me');
+  if (response.status === 401 && !isSessionEndpoint) {
+    window.dispatchEvent(new CustomEvent('virtuo:unauthorized'));
+  }
+  return response;
+}
+
 /**
  * Lexon përgjigje API pa nxjerrë gabimin teknik “Unexpected token <”.
  * Proxy/NGINX mund të kthejë HTML për 502/504; përdoruesi duhet të marrë

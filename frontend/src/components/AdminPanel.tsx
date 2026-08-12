@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyRound, Search, ShieldCheck, Trash2, UserPlus, UsersRound } from 'lucide-react';
 import { User } from '../types';
-import { apiErrorMessage, readApiJson } from '../lib/api';
+import { apiErrorMessage, apiFetch, readApiJson } from '../lib/api';
 import RegisterUserModal from './RegisterUserModal';
 
 interface AdminPanelProps {
@@ -9,7 +9,7 @@ interface AdminPanelProps {
 }
 
 async function apiRequest<T>(url: string, method = 'GET', body?: unknown): Promise<T> {
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     method,
     credentials: 'include',
     headers: body ? { 'Content-Type': 'application/json' } : undefined,

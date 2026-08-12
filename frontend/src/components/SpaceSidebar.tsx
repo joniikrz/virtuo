@@ -1,12 +1,14 @@
 import React from 'react';
-import { Check, FolderKanban, ListTodo, LockKeyhole, Plus, UserPlus, Users } from 'lucide-react';
+import { Check, FolderKanban, ListChecks, ListTodo, LockKeyhole, Plus, UserPlus, Users } from 'lucide-react';
 import { Space } from '../types';
 
 interface SpaceSidebarProps {
   spaces: Space[];
   activeSpace: Space | null;
   isAdmin: boolean;
+  isMyTasks: boolean;
   onSelectSpace: (space: Space) => void;
+  onShowMyTasks: () => void;
   onShowCreateSpace: () => void;
   onShowRegisterUser: () => void;
 }
@@ -15,7 +17,9 @@ export default function SpaceSidebar({
   spaces,
   activeSpace,
   isAdmin,
+  isMyTasks,
   onSelectSpace,
+  onShowMyTasks,
   onShowCreateSpace,
   onShowRegisterUser
 }: SpaceSidebarProps) {
@@ -37,6 +41,18 @@ export default function SpaceSidebar({
       </div>
 
       <div className="space-list">
+        <button
+          type="button"
+          className={`space-card my-tasks-card ${isMyTasks ? 'active' : ''}`}
+          onClick={onShowMyTasks}
+          aria-pressed={isMyTasks}
+          style={{ '--space-accent': '#7048e8' } as React.CSSProperties}
+        >
+          <span className="space-card__icon"><ListChecks size={19} /></span>
+          <span className="space-card__body"><span className="space-card__name">Detyrat e mia</span><span className="space-card__meta">Nga të gjitha hapësirat</span></span>
+          {isMyTasks && <span className="space-card__selected"><Check size={13} /></span>}
+        </button>
+
         {spaces.map((space) => {
           const isActive = activeSpace?.id === space.id;
           const color = space.color || '#7048e8';

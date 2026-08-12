@@ -3,7 +3,7 @@ import Login from './components/Login';
 import Navbar from './components/Navbar';
 import Dashboard from './components/Dashboard';
 import AdminPanel from './components/AdminPanel';
-import { readApiJson } from './lib/api';
+import { apiFetch, readApiJson } from './lib/api';
 
 export interface User {
   id: string;
@@ -65,11 +65,22 @@ export default function App() {
     checkAuth();
   }, []);
 
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setUser(null);
+      setNotifications([]);
+      notificationsEtagRef.current = '';
+      setTaskNavigationRequest(null);
+    };
+    window.addEventListener('virtuo:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('virtuo:unauthorized', handleUnauthorized);
+  }, []);
+
   // 2. Marrja e njoftimeve kur përdoruesi është i kyçur
   const fetchNotifications = useCallback(async () => {
     if (!user) return;
     try {
-      const res = await fetch('/api/notifications', {
+      const res = await apiFetch('/api/notifications', {
         credentials: 'include',
         headers: notificationsEtagRef.current ? { 'If-None-Match': notificationsEtagRef.current } : undefined,
       });
@@ -131,7 +142,7 @@ export default function App() {
     );
 
     try {
-      await fetch(`/api/notifications/${id}/read`, {
+      await apiFetch(`/api/notifications/${id}/read`, {
         method: 'PATCH',
         credentials: 'include',
       });
@@ -145,7 +156,7 @@ export default function App() {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
 
     try {
-      await fetch('/api/notifications/read-all', {
+      await apiFetch('/api/notifications/read-all', {
         method: 'PATCH',
         credentials: 'include',
       });
@@ -178,7 +189,7 @@ export default function App() {
   }, [user]);
 
   const handleSpaceInviteResponse = async (inviteId: string, action: 'accept' | 'reject', notificationId: string): Promise<string> => {
-    const response = await fetch(`/api/spaces/invitations/${inviteId}/${action}`, {
+    const response = await apiFetch(`/api/spaces/invitations/${inviteId}/${action}`, {
       method: 'POST',
       credentials: 'include',
     });
@@ -195,7 +206,7 @@ export default function App() {
     setNotifications((current) => current.filter((notification) => notification.id !== notificationId));
     notificationsEtagRef.current = '';
     try {
-      await fetch(`/api/notifications/${notificationId}`, {
+      await apiFetch(`/api/notifications/${notificationId}`, {
         method: 'DELETE',
         credentials: 'include',
       });
