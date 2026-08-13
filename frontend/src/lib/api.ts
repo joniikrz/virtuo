@@ -16,9 +16,9 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
 }
 
 /**
- * Lexon përgjigje API pa nxjerrë gabimin teknik “Unexpected token <”.
- * Proxy/NGINX mund të kthejë HTML për 502/504; përdoruesi duhet të marrë
- * një mesazh të kuptueshëm, jo HTML ose gabim JSON.
+ * Reads an API response without exposing the technical “Unexpected token <” error.
+ * A proxy can return HTML for a 502/504 response; users should receive a clear
+ * message instead of HTML or a JSON parsing error.
  */
 export async function readApiJson<T>(response: Response): Promise<T & ErrorPayload> {
   const body = await response.text();
@@ -29,14 +29,14 @@ export async function readApiJson<T>(response: Response): Promise<T & ErrorPaylo
   } catch {
     return {
       error: response.status === 401
-        ? 'Email-i ose fjalëkalimi janë të gabuar.'
-        : 'Shërbimi nuk është i disponueshëm për momentin. Provo përsëri pas pak.',
+        ? 'The email or password is incorrect.'
+        : 'The service is temporarily unavailable. Please try again shortly.',
     } as T & ErrorPayload;
   }
 }
 
 export function apiErrorMessage(response: Response, data: ErrorPayload, fallback: string): string {
-  if (response.status === 401) return 'Email-i ose fjalëkalimi janë të gabuar.';
-  if (response.status >= 500) return 'Serveri ka një problem të përkohshëm. Provo përsëri pas pak.';
+  if (response.status === 401) return 'The email or password is incorrect.';
+  if (response.status >= 500) return 'The server is temporarily unavailable. Please try again shortly.';
   return data.error || fallback;
 }

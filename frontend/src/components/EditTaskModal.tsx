@@ -39,7 +39,7 @@ export default function EditTaskModal({ task, spaceMembers, onClose, onSubmit, e
     <div className="modal-overlay">
       <div className="modal-content">
         <div className="modal-header">
-          <h3>Ndrysho detyrën</h3>
+          <h3>Edit task</h3>
           <button type="button" className="modal-close-btn" onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
@@ -47,7 +47,7 @@ export default function EditTaskModal({ task, spaceMembers, onClose, onSubmit, e
             {errorMsg && <div style={{ color: 'hsl(var(--accent-danger))', marginBottom: '15px' }}>{errorMsg}</div>}
             
             <div className="form-group">
-              <label>Titulli i detyrës</label>
+              <label>Task title</label>
               <input 
                 type="text" 
                 className="input-field" 
@@ -58,7 +58,7 @@ export default function EditTaskModal({ task, spaceMembers, onClose, onSubmit, e
             </div>
             
             <div className="form-group">
-              <label>Përshkrimi</label>
+              <label>Description</label>
               <textarea 
                 className="input-field" 
                 style={{ minHeight: '80px', resize: 'vertical' }}
@@ -69,7 +69,7 @@ export default function EditTaskModal({ task, spaceMembers, onClose, onSubmit, e
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div className="form-group">
-                <label>Afati i fundit</label>
+                <label>Deadline</label>
                 <input 
                   type="datetime-local" 
                   className="input-field" 
@@ -80,27 +80,27 @@ export default function EditTaskModal({ task, spaceMembers, onClose, onSubmit, e
               </div>
 
               <div className="form-group">
-                <label>Prioriteti</label>
+                <label>Priority</label>
                 <select 
                   className="input-field"
                   value={taskPriority}
                   onChange={e => setTaskPriority(e.target.value)}
                 >
-                  <option value="LOW">I ulët</option>
+                  <option value="LOW">Low</option>
                   <option value="NORMAL">Normal</option>
-                  <option value="HIGH">I lartë</option>
-                  <option value="URGENT">Urgjent</option>
+                  <option value="HIGH">High</option>
+                  <option value="URGENT">Urgent</option>
                 </select>
               </div>
             </div>
             
-            <div className="space-private-note"><strong>Shto ose hiq anëtarë</strong><p>Anëtarët e rinj marrin njoftim dhe email sapo t'i ruash ndryshimet.</p></div>
+            <div className="space-private-note"><strong>Add or remove members</strong><p>New assignees receive a notification and email when you save the changes.</p></div>
             <AssigneeSelector members={spaceMembers} selectedIds={taskAssigneeIds} onChange={setTaskAssigneeIds} />
 
           </div>
           <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Anulo</button>
-            <button type="submit" className="btn btn-primary" disabled={taskAssigneeIds.length === 0}>Ruaj ndryshimet</button>
+            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={taskAssigneeIds.length === 0}>Save changes</button>
           </div>
         </form>
       </div>

@@ -51,7 +51,7 @@ export default function TaskDetailModal({
     try {
       await onDeleteAttachment(task.id, attachmentId);
     } catch (error) {
-      setAttachmentError(error instanceof Error ? error.message : 'Skedari nuk u fshi. Provo përsëri.');
+      setAttachmentError(error instanceof Error ? error.message : 'The attachment could not be deleted. Please try again.');
     } finally {
       setDeletingAttachmentId(null);
     }
@@ -70,7 +70,7 @@ export default function TaskDetailModal({
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
             <div>
-              <span className="task-detail-label">Statusi i detyrës</span>
+              <span className="task-detail-label">Task status</span>
               <div style={{ marginTop: '6px' }}>
                 <select
                   className="input-field"
@@ -78,19 +78,19 @@ export default function TaskDetailModal({
                   onChange={e => onStatusChange(task.id, e.target.value)}
                   style={{ padding: '6px 12px', fontSize: '0.85rem' }}
                 >
-                  <option value="TODO">Për t'u bërë</option>
-                  <option value="IN_PROGRESS">Në proces</option>
-                  <option value="COMPLETED">E përfunduar</option>
+                  <option value="TODO">To do</option>
+                  <option value="IN_PROGRESS">In progress</option>
+                  <option value="COMPLETED">Completed</option>
                 </select>
               </div>
             </div>
 
             <div>
-              <span className="task-detail-label">Afati i fundit</span>
+              <span className="task-detail-label">Deadline</span>
               <div className="task-detail-val" style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Calendar size={16} />
                 <span>
-                  {new Date(task.deadline).toLocaleString('sq-AL', {
+                  {new Date(task.deadline).toLocaleString('en-GB', {
                     dateStyle: 'medium',
                     timeStyle: 'short'
                   })}
@@ -102,34 +102,34 @@ export default function TaskDetailModal({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                <span className="task-detail-label">Anëtarët e caktuar</span>
-                {canEdit && <button type="button" onClick={onEditClick} className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }}><Edit size={14} /> Shto/hiq</button>}
+                <span className="task-detail-label">Assignees</span>
+                {canEdit && <button type="button" onClick={onEditClick} className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }}><Edit size={14} /> Add/remove</button>}
               </div>
               <p style={{ marginTop: '6px', fontSize: '0.95rem' }}>
-                {assignedUsers.length ? assignedUsers.map((user) => `${user.firstName} ${user.lastName}`).join(', ') : 'I pacaktuar'}
+                {assignedUsers.length ? assignedUsers.map((user) => `${user.firstName} ${user.lastName}`).join(', ') : 'Unassigned'}
               </p>
             </div>
             <div>
-              <span className="task-detail-label">Prioriteti</span>
+              <span className="task-detail-label">Priority</span>
               <p style={{ marginTop: '6px', fontSize: '0.95rem' }}>
                 {task.priority || 'NORMAL'}
               </p>
             </div>
           </div>
 
-          {task.description?.trim() && <div className="task-detail-section" style={{ marginBottom: '20px' }}><span className="task-detail-label">Përshkrimi</span><p style={{ marginTop: '6px', fontSize: '0.95rem', color: 'hsl(var(--text-secondary))', whiteSpace: 'pre-line' }}>{task.description}</p></div>}
+          {task.description?.trim() && <div className="task-detail-section" style={{ marginBottom: '20px' }}><span className="task-detail-label">Description</span><p style={{ marginTop: '6px', fontSize: '0.95rem', color: 'hsl(var(--text-secondary))', whiteSpace: 'pre-line' }}>{task.description}</p></div>}
 
-          {/* Shtojcat (Attachments) */}
+          {/* Attachments */}
           <div className="task-detail-section">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
               <span className="task-detail-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Paperclip size={16} />
-                <span>Skedarët e bashkëngjitur ({task.attachments?.length || 0})</span>
+                <span>Attachments ({task.attachments?.length || 0})</span>
               </span>
               
               <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', padding: '4px 10px' }}>
                 <FileUp size={14} />
-                <span>{uploadingFile ? 'Po ngarkohet...' : 'Ngarko Skedar'}</span>
+                <span>{uploadingFile ? 'Uploading...' : 'Upload file'}</span>
                 <input type="file" onChange={handleFileChange} disabled={uploadingFile} style={{ display: 'none' }} />
               </label>
             </div>
@@ -160,8 +160,8 @@ export default function TaskDetailModal({
                         download
                         className="btn btn-secondary btn-sm"
                         style={{ padding: '4px 8px' }}
-                        aria-label={`Shkarko ${att.fileName}`}
-                        title="Shkarko"
+                        aria-label={`Download ${att.fileName}`}
+                        title="Download"
                       >
                         <Download size={14} />
                       </a>
@@ -172,8 +172,8 @@ export default function TaskDetailModal({
                           style={{ padding: '4px 8px' }}
                           onClick={() => handleDeleteAttachment(att.id)}
                           disabled={deletingAttachmentId === att.id}
-                          aria-label={`Fshij ${att.fileName}`}
-                          title="Fshij skedarin"
+                          aria-label={`Delete ${att.fileName}`}
+                          title="Delete attachment"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -182,7 +182,7 @@ export default function TaskDetailModal({
                   </div>
                 ))
               ) : (
-                <span style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))' }}>Nuk ka skedarë të bashkëngjitur.</span>
+                <span style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))' }}>No attachments.</span>
               )}
               {attachmentError && <span className="attachment-error" role="alert">{attachmentError}</span>}
             </div>
@@ -197,8 +197,8 @@ export default function TaskDetailModal({
 
         </div>
         <div className="modal-footer">
-          {canDelete && <button type="button" className="btn btn-secondary" style={{ color: 'hsl(var(--accent-danger))' }} onClick={() => onDelete(task.id)}><Trash2 size={16} /> Fshij Detyrën</button>}
-          <button type="button" className="btn btn-secondary" onClick={onClose}>Mbyll</button>
+          {canDelete && <button type="button" className="btn btn-secondary" style={{ color: 'hsl(var(--accent-danger))' }} onClick={() => onDelete(task.id)}><Trash2 size={16} /> Delete task</button>}
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

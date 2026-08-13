@@ -46,7 +46,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response): Prom
     });
   } catch (error) {
     console.error('Fetch notifications error:', error);
-    res.status(500).json({ error: 'Ndodhi një gabim gjatë marrjes së njoftimeve' });
+    res.status(500).json({ error: 'An error occurred while retrieving notifications' });
   }
 });
 
@@ -70,13 +70,13 @@ router.patch('/:id/read', authenticateToken, async (req: AuthRequest, res: Respo
     });
 
     if (updated.count === 0) {
-      res.status(404).json({ error: 'Njoftimi nuk u gjet' });
+      res.status(404).json({ error: 'Notification not found' });
       return;
     }
     res.json({ id: notificationId, isRead: true });
   } catch (error) {
     console.error('Mark notification read error:', error);
-    res.status(500).json({ error: 'Ndodhi një gabim' });
+    res.status(500).json({ error: 'An error occurred' });
   }
 });
 
@@ -98,10 +98,10 @@ router.patch('/read-all', authenticateToken, async (req: AuthRequest, res: Respo
       data: { isRead: true },
     });
 
-    res.json({ message: 'Të gjitha njoftimet u shënuan si të lexuara' });
+    res.json({ message: 'All notifications marked as read' });
   } catch (error) {
     console.error('Mark all notifications read error:', error);
-    res.status(500).json({ error: 'Ndodhi një gabim' });
+    res.status(500).json({ error: 'An error occurred' });
   }
 });
 
@@ -121,13 +121,13 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
       where: { id: req.params.id, userId },
     });
     if (deleted.count === 0) {
-      res.status(404).json({ error: 'Njoftimi nuk u gjet' });
+      res.status(404).json({ error: 'Notification not found' });
       return;
     }
-    res.json({ message: 'Njoftimi u hoq' });
+    res.json({ message: 'Notification removed' });
   } catch (error) {
     console.error('Delete notification error:', error);
-    res.status(500).json({ error: 'Njoftimi nuk mund të hiqej' });
+    res.status(500).json({ error: 'The notification could not be removed' });
   }
 });
 

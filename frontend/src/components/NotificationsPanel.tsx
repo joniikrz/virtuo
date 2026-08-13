@@ -26,7 +26,7 @@ export default function NotificationsPanel({ notifications, onMarkAsRead, onMark
       const message = await onRespondToSpaceInvite(inviteId, action, notification.id);
       setActionMessage({ type: 'success', text: message });
     } catch (error) {
-      setActionMessage({ type: 'error', text: error instanceof Error ? error.message : 'Ftesa nuk mund të përpunohej.' });
+      setActionMessage({ type: 'error', text: error instanceof Error ? error.message : 'The invitation could not be processed.' });
     } finally {
       setRespondingId(null);
     }
@@ -45,18 +45,18 @@ export default function NotificationsPanel({ notifications, onMarkAsRead, onMark
 
   return (
     <div className="notification-drawer-layer" role="presentation">
-      <button className="notification-drawer-backdrop" type="button" onClick={onClose} aria-label="Mbyll njoftimet" />
+      <button className="notification-drawer-backdrop" type="button" onClick={onClose} aria-label="Close notifications" />
 
-      <aside className="notification-drawer" role="dialog" aria-modal="true" aria-label="Njoftimet">
+      <aside className="notification-drawer" role="dialog" aria-modal="true" aria-label="Notifications">
         <header className="notification-drawer__header">
           <div className="notification-drawer__title">
             <span className="notification-drawer__title-icon"><Bell size={19} /></span>
             <div>
-              <h3>Njoftimet</h3>
-              <p>{unreadCount > 0 ? `${unreadCount} të palexuara` : 'Të gjitha janë lexuar'}</p>
+              <h3>Notifications</h3>
+              <p>{unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}</p>
             </div>
           </div>
-          <button type="button" className="notification-drawer__close" onClick={onClose} aria-label="Mbyll njoftimet">
+          <button type="button" className="notification-drawer__close" onClick={onClose} aria-label="Close notifications">
             <X size={20} />
           </button>
         </header>
@@ -64,7 +64,7 @@ export default function NotificationsPanel({ notifications, onMarkAsRead, onMark
         {unreadCount > 0 && (
           <div className="notification-drawer__actions">
             <button onClick={onMarkAllAsRead} className="btn btn-secondary btn-sm">
-              <CheckCheck size={15} /> Shënoji të gjitha si të lexuara
+              <CheckCheck size={15} /> Mark all as read
             </button>
           </div>
         )}
@@ -74,8 +74,8 @@ export default function NotificationsPanel({ notifications, onMarkAsRead, onMark
           {notifications.length === 0 ? (
             <div className="notification-drawer__empty">
               <span><Inbox size={26} /></span>
-              <strong>Nuk ka njoftime</strong>
-              <p>Kur të ketë aktivitet të ri në detyrat e tua, do të shfaqet këtu.</p>
+              <strong>No notifications</strong>
+              <p>New activity on your tasks will appear here.</p>
             </div>
           ) : (
             notifications.map((notification) => {
@@ -88,13 +88,13 @@ export default function NotificationsPanel({ notifications, onMarkAsRead, onMark
                     <div className="notification-drawer__content">
                       <strong>{notification.title}</strong>
                       <p>{notification.message}</p>
-                      <time dateTime={notification.createdAt}>{new Date(notification.createdAt).toLocaleString('sq-AL', { dateStyle: 'medium', timeStyle: 'short' })}</time>
+                      <time dateTime={notification.createdAt}>{new Date(notification.createdAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</time>
                       <div className="notification-invite-actions">
                         <button type="button" className="btn btn-primary btn-sm" disabled={isResponding} onClick={() => void respondToInvite(notification, 'accept')}>
-                          {isResponding ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />} Prano
+                          {isResponding ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />} Accept
                         </button>
                         <button type="button" className="btn btn-secondary btn-sm" disabled={isResponding} onClick={() => void respondToInvite(notification, 'reject')}>
-                          <XCircle size={15} /> Refuzo
+                          <XCircle size={15} /> Decline
                         </button>
                       </div>
                     </div>
@@ -110,13 +110,13 @@ export default function NotificationsPanel({ notifications, onMarkAsRead, onMark
                     if (!notification.isRead) onMarkAsRead(notification.id);
                     if (notification.taskId) onOpenTask(notification.taskId, notification.id);
                   }}
-                  title={notification.taskId ? 'Hap detyrën' : 'Shëno si të lexuar'}
+                  title={notification.taskId ? 'Open task' : 'Mark as read'}
                 >
                   <span className="notification-drawer__status" aria-hidden="true" />
                   <div className="notification-drawer__content">
                     <strong>{notification.title}</strong>
                     <p>{notification.message}</p>
-                    <time dateTime={notification.createdAt}>{new Date(notification.createdAt).toLocaleString('sq-AL', { dateStyle: 'medium', timeStyle: 'short' })}</time>
+                    <time dateTime={notification.createdAt}>{new Date(notification.createdAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</time>
                   </div>
                   {notification.taskId && <ChevronRight className="notification-drawer__open-icon" size={17} aria-hidden="true" />}
                 </button>

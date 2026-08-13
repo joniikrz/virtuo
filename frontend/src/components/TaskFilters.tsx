@@ -33,18 +33,18 @@ interface TaskFiltersProps {
 }
 
 const statusChoices = [
-  { value: 'ALL', label: 'Të gjitha' },
-  { value: 'TODO', label: "Për t'u bërë" },
-  { value: 'IN_PROGRESS', label: 'Në proces' },
-  { value: 'COMPLETED', label: 'Të përfunduara' },
+  { value: 'ALL', label: 'All' },
+  { value: 'TODO', label: 'To do' },
+  { value: 'IN_PROGRESS', label: 'In progress' },
+  { value: 'COMPLETED', label: 'Completed' },
 ];
 
 const priorityChoices = [
-  { value: 'ALL', label: 'Të gjitha' },
-  { value: 'URGENT', label: 'Urgjent' },
-  { value: 'HIGH', label: 'I lartë' },
+  { value: 'ALL', label: 'All' },
+  { value: 'URGENT', label: 'Urgent' },
+  { value: 'HIGH', label: 'High' },
   { value: 'NORMAL', label: 'Normal' },
-  { value: 'LOW', label: 'I ulët' },
+  { value: 'LOW', label: 'Low' },
 ];
 
 export default function TaskFilters({ tasks, members, filters, resultCount, onChange }: TaskFiltersProps) {
@@ -52,7 +52,7 @@ export default function TaskFilters({ tasks, members, filters, resultCount, onCh
   const containerRef = useRef<HTMLElement>(null);
   const tags = Array.from(
     new Map(tasks.flatMap((task) => task.tags || []).map(({ tag }) => [tag.id, tag])).values()
-  ).sort((first, second) => first.name.localeCompare(second.name, 'sq'));
+  ).sort((first, second) => first.name.localeCompare(second.name, 'en'));
 
   const updateFilter = (key: keyof TaskFiltersState, value: string) => {
     onChange({ ...filters, [key]: value });
@@ -82,7 +82,7 @@ export default function TaskFilters({ tasks, members, filters, resultCount, onCh
   }, [isOpen]);
 
   return (
-    <section ref={containerRef} className="task-filter-shell" aria-label="Kërkimi dhe filtrat e detyrave">
+    <section ref={containerRef} className="task-filter-shell" aria-label="Task search and filters">
       <div className="task-filter-toolbar">
         <label className="task-search task-search--compact">
           <Search size={18} />
@@ -90,11 +90,11 @@ export default function TaskFilters({ tasks, members, filters, resultCount, onCh
             type="search"
             value={filters.query}
             onChange={(event) => updateFilter('query', event.target.value)}
-            placeholder="Kërko detyrat..."
-            aria-label="Kërko detyrat"
+            placeholder="Search tasks..."
+            aria-label="Search tasks"
           />
           {filters.query && (
-            <button type="button" onClick={() => updateFilter('query', '')} aria-label="Pastro kërkimin">
+            <button type="button" onClick={() => updateFilter('query', '')} aria-label="Clear search">
               <X size={16} />
             </button>
           )}
@@ -104,30 +104,30 @@ export default function TaskFilters({ tasks, members, filters, resultCount, onCh
           type="button"
           className={`task-filter-trigger ${isOpen || advancedFilterCount > 0 ? 'active' : ''}`}
           onClick={() => setIsOpen((current) => !current)}
-          aria-label="Hap filtrat"
+          aria-label="Open filters"
           aria-expanded={isOpen}
         >
           <SlidersHorizontal size={19} />
-          <span>Filtro</span>
+          <span>Filter</span>
           {advancedFilterCount > 0 && <strong>{advancedFilterCount}</strong>}
         </button>
       </div>
 
       {isOpen && (
-        <div className="task-filter-popover" role="dialog" aria-label="Zgjidh filtrat">
+        <div className="task-filter-popover" role="dialog" aria-label="Choose filters">
           <div className="task-filter-popover__header">
             <span className="task-filter-popover__icon"><SlidersHorizontal size={18} /></span>
             <div>
-              <strong>Filtro detyrat</strong>
-              <span>Zgjidh vetëm kriteret që të duhen</span>
+              <strong>Filter tasks</strong>
+              <span>Select only the criteria you need</span>
             </div>
             <span className="task-filter-popover__results">{resultCount}/{tasks.length}</span>
-            <button type="button" onClick={() => setIsOpen(false)} aria-label="Mbyll filtrat"><X size={18} /></button>
+            <button type="button" onClick={() => setIsOpen(false)} aria-label="Close filters"><X size={18} /></button>
           </div>
 
           <div className="filter-choice-panels">
             <div className="filter-choice-group">
-              <span>Statusi</span>
+              <span>Status</span>
               <div className="filter-choice-row">
                 {statusChoices.map((choice) => (
                   <button
@@ -144,7 +144,7 @@ export default function TaskFilters({ tasks, members, filters, resultCount, onCh
             </div>
 
             <div className="filter-choice-group">
-              <span>Prioriteti</span>
+              <span>Priority</span>
               <div className="filter-choice-row">
                 {priorityChoices.map((choice) => (
                   <button
@@ -161,64 +161,64 @@ export default function TaskFilters({ tasks, members, filters, resultCount, onCh
             </div>
           </div>
 
-          <div className="task-filter-popover__section-title"><span>Filtra të tjerë</span><small>Kombinoji sipas nevojës</small></div>
+          <div className="task-filter-popover__section-title"><span>More filters</span><small>Combine them as needed</small></div>
           <div className="task-filter-popover__grid">
             <label>
-              <span>Anëtari</span>
+              <span>Member</span>
               <select value={filters.assignee} onChange={(event) => updateFilter('assignee', event.target.value)}>
-                <option value="ALL">Të gjithë anëtarët</option>
-                <option value="UNASSIGNED">Pa person të caktuar</option>
+                <option value="ALL">All members</option>
+                <option value="UNASSIGNED">Unassigned</option>
                 {members.map((member) => <option key={member.id} value={member.id}>{member.firstName} {member.lastName}</option>)}
               </select>
             </label>
 
             <label>
-              <span>Afati</span>
+              <span>Deadline</span>
               <select value={filters.deadline} onChange={(event) => updateFilter('deadline', event.target.value)}>
-                <option value="ALL">Çdo afat</option>
-                <option value="OVERDUE">Me afat të kaluar</option>
-                <option value="TODAY">Për sot</option>
-                <option value="NEXT_7_DAYS">7 ditët e ardhshme</option>
-                <option value="NO_DEADLINE">Pa afat</option>
+                <option value="ALL">Any deadline</option>
+                <option value="OVERDUE">Overdue</option>
+                <option value="TODAY">Due today</option>
+                <option value="NEXT_7_DAYS">Next 7 days</option>
+                <option value="NO_DEADLINE">No deadline</option>
               </select>
             </label>
 
             <label>
-              <span>Etiketa</span>
+              <span>Tag</span>
               <select value={filters.tag} onChange={(event) => updateFilter('tag', event.target.value)}>
-                <option value="ALL">Të gjitha etiketat</option>
+                <option value="ALL">All tags</option>
                 {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
               </select>
             </label>
 
             <label>
-              <span>Lidhja ime</span>
+              <span>My relationship</span>
               <select value={filters.relationship} onChange={(event) => updateFilter('relationship', event.target.value)}>
-                <option value="ALL">Të gjitha detyrat e mia</option>
-                <option value="ASSIGNED_TO_ME">Të caktuara për mua</option>
-                <option value="CREATED_BY_ME">Të krijuara nga unë</option>
+                <option value="ALL">All my tasks</option>
+                <option value="ASSIGNED_TO_ME">Assigned to me</option>
+                <option value="CREATED_BY_ME">Created by me</option>
               </select>
             </label>
 
             <label className="task-filter-popover__sort">
-              <span>Renditja</span>
+              <span>Sort</span>
               <select value={filters.sort} onChange={(event) => updateFilter('sort', event.target.value)}>
-                <option value="DEFAULT">Renditja standarde</option>
-                <option value="DEADLINE_ASC">Afati më i afërt</option>
-                <option value="DEADLINE_DESC">Afati më i largët</option>
-                <option value="PRIORITY_DESC">Prioriteti më i lartë</option>
-                <option value="TITLE_ASC">Titulli A–Z</option>
-                <option value="CREATED_DESC">Më të rejat</option>
+                <option value="DEFAULT">Default order</option>
+                <option value="DEADLINE_ASC">Nearest deadline</option>
+                <option value="DEADLINE_DESC">Latest deadline</option>
+                <option value="PRIORITY_DESC">Highest priority</option>
+                <option value="TITLE_ASC">Title A–Z</option>
+                <option value="CREATED_DESC">Newest first</option>
               </select>
             </label>
           </div>
 
           <div className="task-filter-popover__footer">
             <button type="button" className="btn btn-secondary btn-sm" onClick={clearAdvancedFilters} disabled={advancedFilterCount === 0}>
-              <RotateCcw size={14} /> Pastro filtrat
+              <RotateCcw size={14} /> Clear filters
             </button>
             <button type="button" className="btn btn-primary btn-sm" onClick={() => setIsOpen(false)}>
-              Shfaq {resultCount} {resultCount === 1 ? 'detyrë' : 'detyra'}
+              Show {resultCount} {resultCount === 1 ? 'task' : 'tasks'}
             </button>
           </div>
         </div>

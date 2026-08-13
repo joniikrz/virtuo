@@ -4,7 +4,7 @@ export async function logActivity(userId: string, action: string, description: s
   try {
     await prisma.activityLog.create({ data: { userId, action, description } });
   } catch (error) {
-    // Aktiviteti ndihmon auditimin, por nuk duhet ta dështojë veprimin kryesor.
+    // Activity supports auditing but must not fail the primary action.
     console.error('Activity log error:', error);
   }
 }

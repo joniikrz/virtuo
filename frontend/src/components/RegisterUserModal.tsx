@@ -30,91 +30,91 @@ export default function RegisterUserModal({ onClose, onSubmit, errorMsg }: Regis
     <div className="modal-overlay">
       <div className="modal-content">
         <div className="modal-header">
-          <h3>Regjistro Përdorues të Ri</h3>
+          <h3>Register New User</h3>
           <button type="button" className="modal-close-btn" onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
             {errorMsg && <div style={{ color: 'hsl(var(--accent-danger))', marginBottom: '15px' }}>{errorMsg}</div>}
             <div className="form-group">
-              <label>Emri</label>
+              <label>First name</label>
               <input 
                 type="text" 
                 className="input-field" 
                 value={regFirstName} 
                 onChange={e => setRegFirstName(e.target.value)} 
-                placeholder="Filan" 
+                placeholder="John"
                 maxLength={60}
                 required 
               />
             </div>
             <div className="form-group">
-              <label>Mbiemri</label>
+              <label>Last name</label>
               <input 
                 type="text" 
                 className="input-field" 
                 value={regLastName} 
                 onChange={e => setRegLastName(e.target.value)} 
-                placeholder="Fisteku" 
+                placeholder="Smith"
                 maxLength={60}
                 required 
               />
             </div>
             <div className="form-group">
-              <label>Email Adresa</label>
+              <label>Email address</label>
               <input 
                 type="email" 
                 className="input-field" 
                 value={regEmail} 
                 onChange={e => setRegEmail(e.target.value)} 
-                placeholder="filan@kompania.com" 
+                placeholder="person@company.com"
                 maxLength={254}
                 required 
               />
             </div>
             <div className="form-group">
-              <label>Fjalëkalimi</label>
+              <label>Password</label>
               <input 
                 type="password" 
                 className="input-field" 
                 value={regPassword} 
                 onChange={e => setRegPassword(e.target.value)} 
-                placeholder="Fjalëkalim i sigurt..." 
+                placeholder="Secure password..."
                 minLength={12}
                 maxLength={128}
                 required 
               />
             </div>
             <div className="form-group">
-              <label>Roli i Përdoruesit</label>
+              <label>User role</label>
               <select 
                 className="input-field"
                 value={regRole}
                 onChange={e => setRegRole(e.target.value)}
                 required
               >
-                <option value="USER">Punonjës (User)</option>
-                <option value="ADMIN">Menaxher / Shef (Admin)</option>
+                <option value="USER">Employee (User)</option>
+                <option value="ADMIN">Manager (Admin)</option>
               </select>
             </div>
             <div className="form-group">
-              <label>Kodi fillestar i rikuperimit</label>
+              <label>Initial recovery code</label>
               <input
                 type="password"
                 className="input-field"
                 value={regRecoveryCode}
                 onChange={e => setRegRecoveryCode(e.target.value)}
-                placeholder="10–64 karaktere"
+                placeholder="10–64 characters"
                 minLength={10}
                 maxLength={64}
                 required
               />
-              <small className="field-help">Jepja përdoruesit privatisht; ai mund ta ndryshojë te Cilësimet.</small>
+              <small className="field-help">Share it with the user privately; they can change it in Settings.</small>
             </div>
           </div>
           <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Anulo</button>
-            <button type="submit" className="btn btn-primary">Regjistro</button>
+            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-primary">Register</button>
           </div>
         </form>
       </div>

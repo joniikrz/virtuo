@@ -97,7 +97,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
     return res.json(spaces);
   } catch (error) {
     console.error('Fetch spaces error:', error);
-    return res.status(500).json({ error: 'Ndodhi një gabim gjatë marrjes së hapësirave të punës' });
+    return res.status(500).json({ error: 'An error occurred while retrieving workspaces' });
   }
 });
 
@@ -111,7 +111,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   const creatorId = req.user?.id;
 
   if (!name || name.length > 100) {
-    return res.status(400).json({ error: 'Emri i hapësirës duhet të ketë 1 deri në 100 karaktere' });
+    return res.status(400).json({ error: 'The workspace name must contain between 1 and 100 characters' });
   }
 
   if (!creatorId) {
@@ -144,7 +144,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
     return res.status(201).json(result);
   } catch (error) {
     console.error('Create space error:', error);
-    return res.status(500).json({ error: 'Ndodhi një gabim gjatë krijimit të hapësirës së punës' });
+    return res.status(500).json({ error: 'An error occurred while creating the workspace' });
   }
 });
 
@@ -157,18 +157,18 @@ router.post('/:id/invitations', authenticateToken, async (req: AuthRequest, res:
   const email = normalizeEmail(req.body.email);
   const currentUserId = req.user?.id;
   if (!currentUserId) return res.status(401).json({ error: 'I paautorizuar' });
-  if (!EMAIL_REGEX.test(email)) return res.status(400).json({ error: 'Shkruaj një email të vlefshëm' });
+  if (!EMAIL_REGEX.test(email)) return res.status(400).json({ error: 'Enter a valid email address' });
 
   try {
     const space = await prisma.space.findUnique({ where: { id: spaceId } });
-    if (!space) return res.status(404).json({ error: 'Hapësira e punës nuk u gjet' });
+    if (!space) return res.status(404).json({ error: 'Workspace not found' });
     if (space.createdById !== currentUserId) {
-      return res.status(403).json({ error: 'Vetëm krijuesi i hapësirës mund të ftojë anëtarë' });
+      return res.status(403).json({ error: 'Only the workspace owner can invite members' });
     }
 
     const userToInvite = await prisma.user.findUnique({ where: { email } });
-    if (!userToInvite) return res.status(404).json({ error: 'Nuk ekziston asnjë përdorues i regjistruar me këtë email' });
-    if (userToInvite.id === currentUserId) return res.status(400).json({ error: 'Ti je tashmë pronari i kësaj hapësire' });
+    if (!userToInvite) return res.status(404).json({ error: 'No registered user exists with this email address' });
+    if (userToInvite.id === currentUserId) return res.status(400).json({ error: 'You are already the owner of this workspace' });
 
     const [existingMember, existingInvite, memberCount, pendingInviteCount] = await Promise.all([
       prisma.spaceMember.findUnique({ where: { spaceId_userId: { spaceId, userId: userToInvite.id } } }),
@@ -176,10 +176,10 @@ router.post('/:id/invitations', authenticateToken, async (req: AuthRequest, res:
       prisma.spaceMember.count({ where: { spaceId } }),
       prisma.spaceInvite.count({ where: { spaceId, status: 'PENDING' } }),
     ]);
-    if (existingMember) return res.status(409).json({ error: 'Ky përdorues është tashmë anëtar i hapësirës' });
-    if (existingInvite?.status === 'PENDING') return res.status(409).json({ error: 'Ky përdorues e ka tashmë një ftesë në pritje' });
+    if (existingMember) return res.status(409).json({ error: 'This user is already a workspace member' });
+    if (existingInvite?.status === 'PENDING') return res.status(409).json({ error: 'This user already has a pending invitation' });
     if (memberCount + pendingInviteCount >= maxSpaceMembers) {
-      return res.status(409).json({ error: `Hapësira mund të ketë maksimumi ${maxSpaceMembers} anëtarë` });
+      return res.status(409).json({ error: `A workspace can have at most ${maxSpaceMembers} members` });
     }
 
     const invite = await prisma.$transaction(async (tx) => {
@@ -193,8 +193,8 @@ router.post('/:id/invitations', authenticateToken, async (req: AuthRequest, res:
         data: {
           userId: userToInvite.id,
           type: 'SPACE_INVITE',
-          title: 'Ftesë në hapësirë',
-          message: `${req.user?.firstName || 'Një përdorues'} ${req.user?.lastName || ''} të ftoi në hapësirën: ${space.name}`.replace(/\s+/g, ' ').trim(),
+          title: 'Workspace invitation',
+          message: `${req.user?.firstName || 'A user'} ${req.user?.lastName || ''} invited you to the workspace: ${space.name}`.replace(/\s+/g, ' ').trim(),
           resourceType: 'SPACE_INVITE',
           resourceId: savedInvite.id,
           spaceInviteId: savedInvite.id,
@@ -204,12 +204,12 @@ router.post('/:id/invitations', authenticateToken, async (req: AuthRequest, res:
     });
 
     return res.status(201).json({
-      message: `Ftesa iu dërgua ${userToInvite.email}`,
+      message: `Invitation sent to ${userToInvite.email}`,
       invite: { id: invite.id, email: userToInvite.email, status: invite.status },
     });
   } catch (error) {
     console.error('Invite member error:', error);
-    return res.status(500).json({ error: 'Ndodhi një gabim gjatë dërgimit të ftesës' });
+    return res.status(500).json({ error: 'An error occurred while sending the invitation' });
   }
 });
 
@@ -220,7 +220,7 @@ router.post('/invitations/:inviteId/accept', authenticateToken, async (req: Auth
   try {
     const invite = await prisma.spaceInvite.findUnique({ where: { id: req.params.inviteId }, include: { space: true } });
     if (!invite || invite.invitedUserId !== userId || invite.status !== 'PENDING') {
-      return res.status(404).json({ error: 'Ftesa nuk u gjet ose nuk është më aktive' });
+      return res.status(404).json({ error: 'The invitation was not found or is no longer active' });
     }
 
     await prisma.$transaction(async (tx) => {
@@ -244,20 +244,20 @@ router.post('/invitations/:inviteId/accept', authenticateToken, async (req: Auth
         data: {
           userId: invite.invitedById,
           type: 'SPACE_INVITE_ACCEPTED',
-          title: 'Ftesa u pranua',
-          message: `${req.user?.firstName || 'Përdoruesi'} ${req.user?.lastName || ''} pranoi ftesën për: ${invite.space.name}`.replace(/\s+/g, ' ').trim(),
+          title: 'Invitation accepted',
+          message: `${req.user?.firstName || 'The user'} ${req.user?.lastName || ''} accepted the invitation to: ${invite.space.name}`.replace(/\s+/g, ' ').trim(),
           resourceType: 'SPACE',
           resourceId: invite.spaceId,
         },
       });
     });
 
-    return res.json({ message: `U bëre anëtar i hapësirës ${invite.space.name}`, spaceId: invite.spaceId });
+    return res.json({ message: `You joined the workspace ${invite.space.name}`, spaceId: invite.spaceId });
   } catch (error) {
-    if (error instanceof Error && error.message === 'SPACE_FULL') return res.status(409).json({ error: 'Hapësira e ka arritur numrin maksimal të anëtarëve' });
-    if (error instanceof Error && error.message === 'INVITE_NOT_PENDING') return res.status(409).json({ error: 'Kjo ftesë është trajtuar tashmë' });
+    if (error instanceof Error && error.message === 'SPACE_FULL') return res.status(409).json({ error: 'The workspace has reached its member limit' });
+    if (error instanceof Error && error.message === 'INVITE_NOT_PENDING') return res.status(409).json({ error: 'This invitation has already been processed' });
     console.error('Accept space invite error:', error);
-    return res.status(500).json({ error: 'Ftesa nuk mund të pranohej' });
+    return res.status(500).json({ error: 'The invitation could not be accepted' });
   }
 });
 
@@ -268,7 +268,7 @@ router.post('/invitations/:inviteId/reject', authenticateToken, async (req: Auth
   try {
     const invite = await prisma.spaceInvite.findUnique({ where: { id: req.params.inviteId }, include: { space: true } });
     if (!invite || invite.invitedUserId !== userId || invite.status !== 'PENDING') {
-      return res.status(404).json({ error: 'Ftesa nuk u gjet ose nuk është më aktive' });
+      return res.status(404).json({ error: 'The invitation was not found or is no longer active' });
     }
     const rejected = await prisma.$transaction(async (tx) => {
       const updated = await tx.spaceInvite.updateMany({
@@ -281,19 +281,19 @@ router.post('/invitations/:inviteId/reject', authenticateToken, async (req: Auth
         data: {
           userId: invite.invitedById,
           type: 'SPACE_INVITE_REJECTED',
-          title: 'Ftesa u refuzua',
-          message: `${req.user?.firstName || 'Përdoruesi'} ${req.user?.lastName || ''} refuzoi ftesën për: ${invite.space.name}`.replace(/\s+/g, ' ').trim(),
+          title: 'Invitation declined',
+          message: `${req.user?.firstName || 'The user'} ${req.user?.lastName || ''} declined the invitation to: ${invite.space.name}`.replace(/\s+/g, ' ').trim(),
           resourceType: 'SPACE',
           resourceId: invite.spaceId,
         },
       });
       return true;
     });
-    if (!rejected) return res.status(409).json({ error: 'Kjo ftesë është trajtuar tashmë' });
-    return res.json({ message: 'Ftesa u refuzua' });
+    if (!rejected) return res.status(409).json({ error: 'This invitation has already been processed' });
+    return res.json({ message: 'Invitation declined' });
   } catch (error) {
     console.error('Reject space invite error:', error);
-    return res.status(500).json({ error: 'Ftesa nuk mund të refuzohej' });
+    return res.status(500).json({ error: 'The invitation could not be declined' });
   }
 });
 
@@ -313,7 +313,7 @@ router.get('/:id/members', authenticateToken, async (req: AuthRequest, res: Resp
     const space = await prisma.space.findUnique({ where: { id: spaceId } });
 
     if (!space) {
-      return res.status(404).json({ error: 'Hapësira e punës nuk u gjet' });
+      return res.status(404).json({ error: 'Workspace not found' });
     }
 
     if (space.createdById !== userId) {
@@ -327,7 +327,7 @@ router.get('/:id/members', authenticateToken, async (req: AuthRequest, res: Resp
       });
 
       if (!isMember) {
-        return res.status(403).json({ error: 'Nuk jeni anëtar i kësaj hapësire' });
+        return res.status(403).json({ error: 'You are not a member of this workspace' });
       }
     }
 
@@ -361,7 +361,7 @@ router.get('/:id/members', authenticateToken, async (req: AuthRequest, res: Resp
     );
   } catch (error) {
     console.error('Fetch space members error:', error);
-    return res.status(500).json({ error: 'Ndodhi një gabim gjatë marrjes së anëtarëve' });
+    return res.status(500).json({ error: 'An error occurred while retrieving members' });
   }
 });
 
@@ -372,14 +372,14 @@ router.delete('/:id/members/:userId', authenticateToken, async (req: AuthRequest
   if (!currentUserId) return res.status(401).json({ error: 'I paautorizuar' });
   try {
     const space = await prisma.space.findUnique({ where: { id: spaceId } });
-    if (!space) return res.status(404).json({ error: 'Hapësira e punës nuk u gjet' });
-    if (space.createdById !== currentUserId) return res.status(403).json({ error: 'Nuk keni leje të hiqni anëtarë' });
-    if (userId === space.createdById) return res.status(400).json({ error: 'Krijuesi i hapësirës nuk mund të hiqet' });
+    if (!space) return res.status(404).json({ error: 'Workspace not found' });
+    if (space.createdById !== currentUserId) return res.status(403).json({ error: 'You do not have permission to remove members' });
+    if (userId === space.createdById) return res.status(400).json({ error: 'The workspace owner cannot be removed' });
     await prisma.spaceMember.delete({ where: { spaceId_userId: { spaceId, userId } } });
-    return res.json({ message: 'Anëtari u hoq nga hapësira' });
+    return res.json({ message: 'Member removed from the workspace' });
   } catch (error) {
     console.error('Remove member error:', error);
-    return res.status(404).json({ error: 'Anëtari nuk u gjet në këtë hapësirë' });
+    return res.status(404).json({ error: 'Member not found in this workspace' });
   }
 });
 
@@ -393,19 +393,19 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
   const { color } = req.body;
   const userId = req.user?.id;
   if (name !== undefined && (!name || name.length > 100)) {
-    return res.status(400).json({ error: 'Emri i hapësirës duhet të ketë 1 deri në 100 karaktere' });
+    return res.status(400).json({ error: 'The workspace name must contain between 1 and 100 characters' });
   }
   if (color !== undefined && (typeof color !== 'string' || !spaceColors.has(color))) {
-    return res.status(400).json({ error: 'Ngjyra e hapësirës nuk është e vlefshme' });
+    return res.status(400).json({ error: 'The workspace colour is invalid' });
   }
   try {
     const space = await prisma.space.findUnique({ where: { id: spaceId } });
     if (!space) {
-      return res.status(404).json({ error: 'Hapësira e punës nuk u gjet' });
+      return res.status(404).json({ error: 'Workspace not found' });
     }
 
     if (space.createdById !== userId) {
-      return res.status(403).json({ error: 'Nuk keni të drejtë të modifikoni këtë hapësirë' });
+      return res.status(403).json({ error: 'You do not have permission to edit this workspace' });
     }
 
     const updated = await prisma.space.update({
@@ -420,7 +420,7 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
     return res.json(updated);
   } catch (error) {
     console.error('Update space error:', error);
-    return res.status(500).json({ error: 'Ndodhi një gabim gjatë përditësimit të hapësirës' });
+    return res.status(500).json({ error: 'An error occurred while updating the workspace' });
   }
 });
 
@@ -435,11 +435,11 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
   try {
     const space = await prisma.space.findUnique({ where: { id: spaceId } });
     if (!space) {
-      return res.status(404).json({ error: 'Hapësira e punës nuk u gjet' });
+      return res.status(404).json({ error: 'Workspace not found' });
     }
 
     if (space.createdById !== userId) {
-      return res.status(403).json({ error: 'Nuk keni të drejtë të fshini këtë hapësirë' });
+      return res.status(403).json({ error: 'You do not have permission to delete this workspace' });
     }
 
     const attachments = await prisma.attachment.findMany({
@@ -457,10 +457,10 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
       await deleteSpace;
     }
     await removeStoredFiles(attachments.map((attachment) => attachment.filePath));
-    return res.json({ message: 'Hapësira u fshi me sukses' });
+    return res.json({ message: 'Workspace deleted successfully' });
   } catch (error) {
     console.error('Delete space error:', error);
-    return res.status(500).json({ error: 'Ndodhi një gabim gjatë fshirjes së hapësirës' });
+    return res.status(500).json({ error: 'An error occurred while deleting the workspace' });
   }
 });
 

@@ -7,7 +7,7 @@ import { verifyToken } from './security';
 
 const taskListLimit = Math.max(50, Math.min(Number(process.env.TASK_LIST_LIMIT) || 500, 2000));
 
-// Ky është vendi i vetëm ku application core lidhet me adapters konkretë.
+// The application core is wired to concrete adapters only in this file.
 export const application = {
   authenticateSession: new AuthenticateSession(
     new PrismaSessionUserRepository(prisma),

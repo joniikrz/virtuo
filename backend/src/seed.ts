@@ -10,12 +10,12 @@ const DEFAULT_ADMIN = {
 };
 
 /**
- * Krijon rolet dhe llogarinë e adminit në nisjen e serverit.
- * Kredencialet mund të mbishkruhen me variabla mjedisi.
+ * Create roles and the administrator account during startup.
+ * Credentials can be overridden with environment variables.
  */
 export async function seedDatabase(): Promise<void> {
   if (process.env.NODE_ENV === 'production' && !process.env.ADMIN_PASSWORD) {
-    throw new Error('ADMIN_PASSWORD duhet të vendoset në production');
+    throw new Error('ADMIN_PASSWORD must be set in production');
   }
   const adminRole = await prisma.role.upsert({
     where: { name: 'ADMIN' },
@@ -26,7 +26,7 @@ export async function seedDatabase(): Promise<void> {
   await prisma.role.upsert({
     where: { name: 'USER' },
     update: {},
-    create: { name: 'USER', description: 'Punonjës / Anëtar i ekipit' },
+    create: { name: 'USER', description: 'Employee / Team member' },
   });
 
   const adminEmail = process.env.ADMIN_EMAIL || DEFAULT_ADMIN.email;
@@ -53,6 +53,6 @@ export async function seedDatabase(): Promise<void> {
         roleId: adminRole.id,
       },
     });
-    console.log(`[Seed] Admin u krijua: ${adminEmail}`);
+    console.log(`[Seed] Administrator created: ${adminEmail}`);
   }
 }

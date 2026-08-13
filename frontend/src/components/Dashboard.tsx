@@ -19,6 +19,8 @@ interface DashboardProps {
   taskNavigationRequest: TaskNavigationRequest | null;
   onTaskNavigationHandled: () => void;
   onTaskNavigationUnavailable: (notificationId: string) => void;
+  myTasksRequestId: number;
+  onMyTasksViewChange: (isMyTasks: boolean) => void;
 }
 
 const priorityWeight: Record<string, number> = { LOW: 1, NORMAL: 2, HIGH: 3, URGENT: 4 };
@@ -41,7 +43,7 @@ const taskDataRevision = (spaceId: string, tasks: Task[]) => `${spaceId}|${tasks
   task._count?.attachments || 0,
 ].join(':')).join('|')}`;
 
-export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNavigationHandled, onTaskNavigationUnavailable }: DashboardProps) {
+export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNavigationHandled, onTaskNavigationUnavailable, myTasksRequestId, onMyTasksViewChange }: DashboardProps) {
   const isAdmin = currentUser.role === 'ADMIN';
 
   const [spaces, setSpaces] = useState<Space[]>([]);
@@ -70,6 +72,15 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
   const taskEtagsRef = useRef<Record<string, string>>({});
   activeSpaceIdRef.current = isMyTasks ? '__my_tasks__' : activeSpace?.id || null;
 
+  useEffect(() => onMyTasksViewChange(isMyTasks), [isMyTasks, onMyTasksViewChange]);
+
+  useEffect(() => {
+    if (myTasksRequestId === 0) return;
+    setIsMyTasks(true);
+    setSelectedTask(null);
+    setShowEditTask(false);
+  }, [myTasksRequestId]);
+
   const myTaskMembers = useMemo(() => {
     const users = tasks.flatMap((task) => task.assignees?.length
       ? task.assignees.map((assignment) => assignment.user)
@@ -81,7 +92,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
     const now = new Date();
     const sevenDaysFromNow = new Date(now);
     sevenDaysFromNow.setDate(now.getDate() + 7);
-    const query = taskFilters.query.trim().toLocaleLowerCase('sq-AL');
+    const query = taskFilters.query.trim().toLocaleLowerCase('en-US');
 
     const matchingTasks = tasks.filter((task) => {
       const assigneeIds = getAssigneeIds(task);
@@ -94,7 +105,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
         task.createdBy?.lastName,
         ...(task.assignees || []).flatMap(({ user }) => [user.firstName, user.lastName, user.email]),
         ...(task.tags || []).map(({ tag }) => tag.name),
-      ].filter(Boolean).join(' ').toLocaleLowerCase('sq-AL');
+      ].filter(Boolean).join(' ').toLocaleLowerCase('en-US');
 
       if (query && !searchableText.includes(query)) return false;
       if (taskFilters.status !== 'ALL' && task.status !== taskFilters.status) return false;
@@ -119,7 +130,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
       if (taskFilters.sort === 'DEADLINE_ASC') return new Date(first.deadline).getTime() - new Date(second.deadline).getTime();
       if (taskFilters.sort === 'DEADLINE_DESC') return new Date(second.deadline).getTime() - new Date(first.deadline).getTime();
       if (taskFilters.sort === 'PRIORITY_DESC') return (priorityWeight[second.priority] || 0) - (priorityWeight[first.priority] || 0);
-      if (taskFilters.sort === 'TITLE_ASC') return first.title.localeCompare(second.title, 'sq');
+      if (taskFilters.sort === 'TITLE_ASC') return first.title.localeCompare(second.title, 'en');
       if (taskFilters.sort === 'CREATED_DESC') return new Date(second.createdAt || 0).getTime() - new Date(first.createdAt || 0).getTime();
       return 0;
     });
@@ -185,7 +196,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
       setTasks(data);
       setSelectedTask((current) => current && data.some((task) => task.id === current.id) ? current : null);
     } catch (error) {
-      console.error('Gabim gjatë marrjes së detyrave të mia:', error);
+      console.error('Unable to fetch My Tasks:', error);
     }
   }, []);
 
@@ -195,7 +206,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
       if (!res.ok) return null;
       return await res.json() as Task;
     } catch (error) {
-      console.error('Gabim gjatë marrjes së detajeve të detyrës:', error);
+      console.error('Unable to fetch task details:', error);
       return null;
     }
   }, []);
@@ -206,7 +217,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
 
     const openNotificationTask = async () => {
       setErrorMsg('');
-      // Mos e lër detyrën e hapur më parë të duket sikur i përket njoftimit të ri.
+      // Close the previous task before resolving a new notification target.
       setSelectedTask(null);
       setShowEditTask(false);
       try {
@@ -214,23 +225,23 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
         if (taskResponse.status === 404) {
           if (taskNavigationRequest.notificationId) {
             onTaskNavigationUnavailable(taskNavigationRequest.notificationId);
-            throw new Error('Kjo detyrë është fshirë. Njoftimi i vjetër u hoq automatikisht.');
+            throw new Error('This task was deleted. Its outdated notification was removed automatically.');
           }
-          throw new Error('Detyra nuk u gjet ose nuk ke më qasje në të.');
+          throw new Error('The task was not found or you no longer have access to it.');
         }
-        if (!taskResponse.ok) throw new Error('Detyra nuk mund të ngarkohet tani. Provo përsëri.');
+        if (!taskResponse.ok) throw new Error('The task cannot be loaded right now. Please try again.');
         const detailedTask = await taskResponse.json() as Task;
 
         let availableSpaces = spaces;
         let targetSpace = availableSpaces.find((space) => space.id === detailedTask.spaceId);
         if (!targetSpace) {
           const response = await apiFetch('/api/spaces', { cache: 'no-store' });
-          if (!response.ok) throw new Error('Hapësira e detyrës nuk mund të ngarkohet.');
+          if (!response.ok) throw new Error('The task workspace could not be loaded.');
           availableSpaces = await response.json() as Space[];
           targetSpace = availableSpaces.find((space) => space.id === detailedTask.spaceId);
           if (!cancelled) setSpaces(availableSpaces);
         }
-        if (!targetSpace) throw new Error('Hapësira e kësaj detyre nuk është më e disponueshme.');
+        if (!targetSpace) throw new Error('This task workspace is no longer available.');
 
         if (!cancelled) {
           setActiveSpace(targetSpace);
@@ -239,7 +250,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
           setTaskFilters(DEFAULT_TASK_FILTERS);
         }
       } catch (error) {
-        if (!cancelled) setErrorMsg(error instanceof Error ? error.message : 'Detyra nuk mund të hapet.');
+        if (!cancelled) setErrorMsg(error instanceof Error ? error.message : 'The task could not be opened.');
       } finally {
         if (!cancelled) onTaskNavigationHandled();
       }
@@ -355,7 +366,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
       setSpaces((current) => [...current, createdSpace]);
       setActiveSpace(createdSpace);
       setShowCreateSpace(false);
-      setSuccessMsg('Hapësira u krijua me sukses.');
+      setSuccessMsg('Workspace created successfully.');
     } catch (err: any) {
       setErrorMsg(err.message);
     }
@@ -374,7 +385,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
       if (!res.ok) throw new Error(data.error);
 
       setShowInviteMember(false);
-      setSuccessMsg(data.message || 'Ftesa u dërgua me sukses.');
+      setSuccessMsg(data.message || 'Invitation sent successfully.');
       window.dispatchEvent(new Event('virtuo:data-change'));
     } catch (err: any) {
       setErrorMsg(err.message);
@@ -391,11 +402,11 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
         body: JSON.stringify(taskData),
       });
       const data = await readApiJson<Task>(res);
-      if (!res.ok) throw new Error(apiErrorMessage(res, data, 'Detyra nuk mund të krijohet.'));
+      if (!res.ok) throw new Error(apiErrorMessage(res, data, 'The task could not be created.'));
 
       setTasks((current) => [data, ...current]);
       setShowCreateTask(false);
-      setSuccessMsg('Detyra u krijua me sukses.');
+      setSuccessMsg('Task created successfully.');
       void fetchSpaces();
       window.dispatchEvent(new Event('virtuo:data-change'));
     } catch (err: any) {
@@ -418,7 +429,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
       setTasks((current) => current.map((task) => task.id === selectedTask.id ? data : task));
       setSelectedTask(data);
       setShowEditTask(false);
-      setSuccessMsg('Detyra u përditësua me sukses.');
+      setSuccessMsg('Task updated successfully.');
       window.dispatchEvent(new Event('virtuo:data-change'));
     } catch (err: any) {
       setErrorMsg(err.message);
@@ -437,7 +448,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
       if (!res.ok) throw new Error(data.error);
 
       setShowRegisterUser(false);
-      setSuccessMsg('Llogaria e re u krijua me sukses.');
+      setSuccessMsg('The new account was created successfully.');
     } catch (err: any) {
       setErrorMsg(err.message);
     }
@@ -478,7 +489,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
         setSelectedTask(updatedTask);
         setTasks((current) => current.map((task) => task.id === taskId ? updatedTask : task));
       }
-      setSuccessMsg('Skedari u ngarkua me sukses.');
+      setSuccessMsg('File uploaded successfully.');
     } catch (err: any) {
       setErrorMsg(err.message);
     } finally {
@@ -502,7 +513,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       await Promise.all([fetchSpaceMembers(activeSpace.id), fetchSpaces()]);
-      setSuccessMsg('Anëtari u hoq nga hapësira.');
+      setSuccessMsg('Member removed from the workspace.');
     } catch (err: any) {
       setErrorMsg(err.message);
     }
@@ -516,7 +527,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
       body: JSON.stringify({ content }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Komenti nuk u ruajt');
+    if (!res.ok) throw new Error(data.error || 'The comment could not be saved.');
     const updateTask = (task: Task) => task.id === taskId ? { ...task, comments: [...(task.comments || []), data] } : task;
     setTasks((current) => current.map(updateTask));
     setSelectedTask((current) => current && updateTask(current));
@@ -524,56 +535,56 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
   };
 
   const handleDeleteComment = async (taskId: string, commentId: string) => {
-    if (!window.confirm('A dëshiron ta fshish këtë koment?')) return;
+    if (!window.confirm('Delete this comment?')) return;
     const res = await apiFetch(`/api/tasks/${taskId}/comments/${commentId}`, { method: 'DELETE' });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Komenti nuk u fshi');
+    if (!res.ok) throw new Error(data.error || 'The comment could not be deleted.');
     const updateTask = (task: Task) => task.id === taskId
       ? { ...task, comments: (task.comments || []).filter((comment) => comment.id !== commentId) }
       : task;
     setTasks((current) => current.map(updateTask));
     setSelectedTask((current) => current && updateTask(current));
-    setSuccessMsg('Komenti u fshi.');
+    setSuccessMsg('Comment deleted.');
     window.dispatchEvent(new Event('virtuo:data-change'));
   };
 
   const handleDeleteAttachment = async (taskId: string, attachmentId: string) => {
-    if (!window.confirm('A dëshiron ta fshish këtë skedar?')) return;
+    if (!window.confirm('Delete this file?')) return;
     const res = await apiFetch(`/api/tasks/${taskId}/attachments/${attachmentId}`, { method: 'DELETE' });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Skedari nuk u fshi');
+    if (!res.ok) throw new Error(data.error || 'The file could not be deleted.');
     const updateTask = (task: Task) => task.id === taskId
       ? { ...task, attachments: (task.attachments || []).filter((attachment) => attachment.id !== attachmentId) }
       : task;
     setTasks((current) => current.map(updateTask));
     setSelectedTask((current) => current && updateTask(current));
-    setSuccessMsg('Skedari u fshi.');
+    setSuccessMsg('File deleted.');
     window.dispatchEvent(new Event('virtuo:data-change'));
   };
 
   const handleDeleteTask = async (taskId: string) => {
-    if (!window.confirm('A dëshiron ta fshish këtë detyrë?')) return;
+    if (!window.confirm('Delete this task?')) return;
     const res = await apiFetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Detyra nuk u fshi');
+    if (!res.ok) throw new Error(data.error || 'The task could not be deleted.');
     setTasks((current) => current.filter((task) => task.id !== taskId));
     await fetchSpaces();
     setSelectedTask(null);
-    setSuccessMsg('Detyra u fshi.');
+    setSuccessMsg('Task deleted.');
     window.dispatchEvent(new Event('virtuo:data-change'));
   };
 
   const handleDeleteSpace = async () => {
-    if (!activeSpace || !window.confirm(`A dëshiron ta fshish hapësirën "${activeSpace.name}" dhe të gjitha detyrat e saj?`)) return;
+    if (!activeSpace || !window.confirm(`Delete the workspace "${activeSpace.name}" and all of its tasks?`)) return;
     const spaceId = activeSpace.id;
     const res = await apiFetch(`/api/spaces/${spaceId}`, { method: 'DELETE' });
     const data = await res.json();
-    if (!res.ok) { setErrorMsg(data.error || 'Hapësira nuk u fshi'); return; }
+    if (!res.ok) { setErrorMsg(data.error || 'The workspace could not be deleted.'); return; }
     setSpaces((current) => current.filter((space) => space.id !== spaceId));
     setActiveSpace(null);
     setTasks([]);
     setSpaceMembers([]);
-    setSuccessMsg('Hapësira dhe të dhënat e lidhura u fshinë.');
+    setSuccessMsg('The workspace and all related data were deleted.');
   };
 
   return (
@@ -583,8 +594,6 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
         spaces={spaces}
         activeSpace={isMyTasks ? null : activeSpace}
         isAdmin={isAdmin}
-        isMyTasks={isMyTasks}
-        onShowMyTasks={() => { setIsMyTasks(true); setSelectedTask(null); setShowEditTask(false); }}
         onSelectSpace={(space) => { setIsMyTasks(false); setActiveSpace(space); setSelectedTask(null); setShowEditTask(false); }}
         onShowCreateSpace={() => { setErrorMsg(''); setShowCreateSpace(true); }}
         onShowRegisterUser={() => { setErrorMsg(''); setShowRegisterUser(true); }}
@@ -594,7 +603,7 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
         {successMsg && (
           <div className="dashboard-alert dashboard-alert--success">
             <span>{successMsg}</span>
-            <button onClick={() => setSuccessMsg('')} aria-label="Mbyll mesazhin">
+            <button onClick={() => setSuccessMsg('')} aria-label="Dismiss message">
               <X size={16} />
             </button>
           </div>
@@ -604,9 +613,9 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
           <>
             <div className="content-header workspace-hero my-tasks-hero">
               <div className="space-info">
-                <span className="workspace-hero__eyebrow"><ListChecks size={14} /> Pamje e përbashkët</span>
-                <h1>Detyrat e mia</h1>
-                <div className="workspace-hero__meta"><span>Task-et që të janë caktuar në të gjitha hapësirat</span><span className="workspace-hero__separator" /><span>{spaces.length} hapësira të qasshme</span></div>
+                <span className="workspace-hero__eyebrow"><ListChecks size={14} /> Combined view</span>
+                <h1>My Tasks</h1>
+                <div className="workspace-hero__meta"><span>Tasks assigned to you across all workspaces</span><span className="workspace-hero__separator" /><span>{spaces.length} accessible {spaces.length === 1 ? 'workspace' : 'workspaces'}</span></div>
               </div>
             </div>
 
@@ -618,12 +627,12 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
           <>
             <div className="content-header workspace-hero">
               <div className="space-info">
-                <span className="workspace-hero__eyebrow"><ShieldCheck size={14} /> Hapësirë private</span>
+                <span className="workspace-hero__eyebrow"><ShieldCheck size={14} /> Private workspace</span>
                 <h1>{activeSpace.name}</h1>
                 <div className="workspace-hero__meta">
-                  <span><Users size={14} /> {spaceMembers.length} {spaceMembers.length === 1 ? 'anëtar' : 'anëtarë'}</span>
+                  <span><Users size={14} /> {spaceMembers.length} {spaceMembers.length === 1 ? 'member' : 'members'}</span>
                   <span className="workspace-hero__separator" />
-                  <span>Krijuar nga <strong>{activeSpace.createdBy?.firstName} {activeSpace.createdBy?.lastName}</strong></span>
+                  <span>Created by <strong>{activeSpace.createdBy?.firstName} {activeSpace.createdBy?.lastName}</strong></span>
                 </div>
               </div>
 
@@ -631,19 +640,19 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
                 {canManageActiveSpace && (
                   <button onClick={() => { setErrorMsg(''); setShowInviteMember(true); }} className="btn btn-secondary">
                     <UserPlus size={18} />
-                    <span>Menaxho anëtarët</span>
+                    <span>Manage members</span>
                   </button>
                 )}
                 {isSpaceOwner && (
                   <button onClick={handleDeleteSpace} className="btn btn-secondary btn-danger-soft">
                     <Trash2 size={18} />
-                    <span>Fshij hapësirën</span>
+                    <span>Delete workspace</span>
                   </button>
                 )}
                 {canCreateTask && (
                   <button onClick={() => { setErrorMsg(''); setShowCreateTask(true); }} className="btn btn-primary">
                     <Plus size={18} />
-                    <span>Shto detyrë</span>
+                    <span>Add task</span>
                   </button>
                 )}
               </div>
@@ -664,13 +673,13 @@ export default function Dashboard({ currentUser, taskNavigationRequest, onTaskNa
         ) : (
           <div className="empty-state dashboard-empty">
             <span className="dashboard-empty__icon"><LockKeyhole size={30} /></span>
-            <h3 style={{ marginBottom: '8px' }}>Mirëseerdhët në Virtuo</h3>
+            <h3 style={{ marginBottom: '8px' }}>Welcome to Virtuo</h3>
             <p style={{ color: 'hsl(var(--text-secondary))' }}>
-              Krijo një hapësirë të re ose zgjidh një ekzistuese nga lista për të filluar punën.
+              Create a new workspace or select one from the list to get started.
             </p>
             <button onClick={() => { setErrorMsg(''); setShowCreateSpace(true); }} className="btn btn-primary" style={{ marginTop: '16px' }}>
               <Plus size={18} />
-              <span>Krijo hapësirën e parë</span>
+              <span>Create your first workspace</span>
             </button>
           </div>
         )}

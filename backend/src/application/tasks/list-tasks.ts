@@ -20,7 +20,7 @@ export class ListTasks {
 
   async execute(input: ListTasksInput): Promise<ListTasksOutput> {
     if (input.spaceId && !await this.repository.canViewSpace(input.spaceId, input.userId)) {
-      throw new AccessDeniedError('Nuk keni leje për këtë hapësirë');
+      throw new AccessDeniedError('You do not have access to this workspace');
     }
 
     const request: TaskListRequest = { ...input, limit: this.resultLimit };
@@ -38,4 +38,3 @@ export class ListTasks {
     };
   }
 }
-

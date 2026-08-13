@@ -32,7 +32,7 @@ export default function CommentsSection({ comments, onAddComment, canDeleteComme
       await onAddComment(content);
       setNewComment('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Komenti nuk u ruajt. Provo përsëri.');
+      setError(err instanceof Error ? err.message : 'The comment could not be saved. Please try again.');
     } finally {
       setSending(false);
     }
@@ -45,7 +45,7 @@ export default function CommentsSection({ comments, onAddComment, canDeleteComme
     try {
       await onDeleteComment(commentId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Komenti nuk u fshi. Provo përsëri.');
+      setError(err instanceof Error ? err.message : 'The comment could not be deleted. Please try again.');
     } finally {
       setDeletingId(null);
     }
@@ -55,7 +55,7 @@ export default function CommentsSection({ comments, onAddComment, canDeleteComme
     <section className="comments-section" aria-labelledby="comments-heading">
       <header className="comments-header">
         <span className="comments-header__icon"><MessageCircle size={17} /></span>
-        <div><h4 id="comments-heading">Biseda</h4><p>{comments.length} {comments.length === 1 ? 'koment' : 'komente'}</p></div>
+        <div><h4 id="comments-heading">Conversation</h4><p>{comments.length} {comments.length === 1 ? 'comment' : 'comments'}</p></div>
         <span className="comments-live"><i /> Live</span>
       </header>
 
@@ -68,15 +68,15 @@ export default function CommentsSection({ comments, onAddComment, canDeleteComme
               <div className="comment-meta">
                 <strong>{comment.author.firstName} {comment.author.lastName}</strong>
                 <span className="comment-role">{roleName}</span>
-                <time dateTime={comment.createdAt}>{new Date(comment.createdAt).toLocaleString('sq-AL', { dateStyle: 'short', timeStyle: 'short' })}</time>
+                <time dateTime={comment.createdAt}>{new Date(comment.createdAt).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}</time>
                 {canDeleteComment(comment) && (
                   <button
                     type="button"
                     className="comment-delete-btn"
                     onClick={() => handleDelete(comment.id)}
                     disabled={deletingId === comment.id}
-                    aria-label="Fshij komentin"
-                    title="Fshij komentin"
+                    aria-label="Delete comment"
+                    title="Delete comment"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -87,7 +87,7 @@ export default function CommentsSection({ comments, onAddComment, canDeleteComme
           </article>;
         })}
         {comments.length === 0 && (
-          <div className="comments-empty"><MessageCircle size={24} /><strong>Ende nuk ka komente</strong><span>Fillo bisedën për këtë detyrë.</span></div>
+          <div className="comments-empty"><MessageCircle size={24} /><strong>No comments yet</strong><span>Start the conversation about this task.</span></div>
         )}
       </div>
 
@@ -102,15 +102,15 @@ export default function CommentsSection({ comments, onAddComment, canDeleteComme
               formRef.current?.requestSubmit();
             }
           }}
-          placeholder="Shkruaj një koment..."
+          placeholder="Write a comment..."
           rows={3}
           maxLength={2000}
           disabled={sending}
         />
         <div className="comment-composer__footer">
-          <span className={error ? 'error' : ''}>{error || `${newComment.length}/2000 · Enter për dërgim, Shift+Enter për rresht të ri`}</span>
+          <span className={error ? 'error' : ''}>{error || `${newComment.length}/2000 · Enter to send, Shift+Enter for a new line`}</span>
           <button type="submit" className="btn btn-primary btn-sm" disabled={!newComment.trim() || sending}>
-            <Send size={15} /> {sending ? 'Duke dërguar...' : 'Dërgo'}
+            <Send size={15} /> {sending ? 'Sending...' : 'Send'}
           </button>
         </div>
       </form>

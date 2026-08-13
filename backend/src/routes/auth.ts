@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import fs from 'fs';
 import path from 'path';
 import prisma from '../prisma';
-import { authenticateToken, requireAdmin, AuthRequest } from '../middleware/auth';
+import { authenticateToken, optionalAuthenticateToken, requireAdmin, AuthRequest } from '../middleware/auth';
 import { logActivity } from '../services/activity';
 import {
   BCRYPT_ROUNDS,
@@ -21,7 +21,7 @@ import {
 
 const router = Router();
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-// Barazon afërsisht kohën e përgjigjes kur email-i nuk ekziston, pa ruajtur ndonjë sekret real.
+// Keeps response timing similar when an email does not exist without storing a real secret.
 const DUMMY_BCRYPT_HASH = '$2a$12$cjgdfWrwg6sC61y2maoHR.If12dicf/GR9TMif4SAiYPLuonTud1y';
 const uploadDirectory = path.resolve(process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads'));
 
@@ -56,19 +56,19 @@ async function removeUserFiles(filePaths: string[]): Promise<void> {
 
 /**
  * POST /api/auth/login
- * Hyrja në sistem (Login)
+ * Sign in.
  */
 router.post('/login', async (req: Request, res: Response): Promise<void> => {
   const { password } = req.body;
   const email = normalizeEmail(req.body.email);
 
   if (!email || typeof password !== 'string' || !password || password.length > 128) {
-    res.status(400).json({ error: 'Ju lutem shkruani email-in dhe fjalëkalimin' });
+    res.status(400).json({ error: 'Please enter your email and password' });
     return;
   }
 
   if (!EMAIL_REGEX.test(email)) {
-    res.status(400).json({ error: 'Email-i nuk është i vlefshëm' });
+    res.status(400).json({ error: 'The email address is invalid' });
     return;
   }
 
@@ -80,12 +80,12 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
 
     const isMatch = await bcrypt.compare(password, user?.passwordHash || DUMMY_BCRYPT_HASH);
     if (!user || !isMatch) {
-      res.status(401).json({ error: 'Email-i ose fjalëkalimi është i gabuar' });
+      res.status(401).json({ error: 'The email or password is incorrect' });
       return;
     }
 
     const token = signSessionToken(user.id, user.sessionVersion);
-    await logActivity(user.id, 'LOGIN', 'U kyç në llogari');
+    await logActivity(user.id, 'LOGIN', 'Signed in');
     setSessionCookie(res, token);
 
     res.json({
@@ -93,7 +93,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ error: 'Ndodhi një gabim në server gjatë hyrjes' });
+    res.status(500).json({ error: 'A server error occurred while signing in' });
   }
 });
 
@@ -108,15 +108,16 @@ router.post('/logout', (req: Request, res: Response): void => {
 
 /**
  * GET /api/auth/me
- * Kthen profilin e përdoruesit aktual të kyçur
+ * Return the current signed-in user profile.
  */
-router.get('/me', authenticateToken, (req: AuthRequest, res: Response): void => {
-  res.json({ user: req.user });
+router.get('/me', optionalAuthenticateToken, (req: AuthRequest, res: Response): void => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ user: req.user || null });
 });
 
 /**
  * GET /api/auth/users
- * Lista e të gjithë përdoruesve
+ * List all users.
  */
 router.get('/users', authenticateToken, requireAdmin, async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -146,13 +147,13 @@ router.get('/users', authenticateToken, requireAdmin, async (_req: AuthRequest, 
     );
   } catch (error) {
     console.error('Fetch users error:', error);
-    res.status(500).json({ error: 'Ndodhi një gabim gjatë marrjes së listës së përdoruesve' });
+    res.status(500).json({ error: 'An error occurred while retrieving users' });
   }
 });
 
 /**
  * POST /api/auth/register
- * Regjistrim publik për përdorues të rinj
+ * Public registration for new users.
  */
 router.post('/register', async (req: Request, res: Response): Promise<void> => {
   const { password, recoveryCode } = req.body;
@@ -161,17 +162,17 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
   const email = normalizeEmail(req.body.email);
 
   if (!email || !password || !firstName || !lastName || !recoveryCode) {
-    res.status(400).json({ error: 'Të gjitha fushat janë të detyrueshme' });
+    res.status(400).json({ error: 'All fields are required' });
     return;
   }
 
   if (!EMAIL_REGEX.test(email)) {
-    res.status(400).json({ error: 'Email-i nuk është i vlefshëm' });
+    res.status(400).json({ error: 'The email address is invalid' });
     return;
   }
 
   if (!validName(firstName) || !validName(lastName)) {
-    res.status(400).json({ error: 'Emri dhe mbiemri duhet të kenë 1 deri në 60 karaktere' });
+    res.status(400).json({ error: 'First and last name must contain between 1 and 60 characters' });
     return;
   }
 
@@ -182,20 +183,20 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
   }
 
   if (!validRecoveryCode(recoveryCode)) {
-    res.status(400).json({ error: `Kodi i rikuperimit duhet të ketë ${RECOVERY_CODE_MIN_LENGTH} deri në ${RECOVERY_CODE_MAX_LENGTH} karaktere` });
+    res.status(400).json({ error: `The recovery code must contain between ${RECOVERY_CODE_MIN_LENGTH} and ${RECOVERY_CODE_MAX_LENGTH} characters` });
     return;
   }
 
   try {
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
-      res.status(400).json({ error: 'Ekziston një përdorues me këtë email' });
+      res.status(400).json({ error: 'An account with this email already exists' });
       return;
     }
 
     const userRole = await prisma.role.findUnique({ where: { name: 'USER' } });
     if (!userRole) {
-      res.status(500).json({ error: 'Roli USER nuk ekziston. Rinisni serverin.' });
+      res.status(500).json({ error: 'The USER role does not exist. Restart the server.' });
       return;
     }
 
@@ -224,17 +225,17 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error) {
     console.error('Register error:', error);
-    res.status(500).json({ error: 'Ndodhi një gabim gjatë regjistrimit' });
+    res.status(500).json({ error: 'An error occurred during registration' });
   }
 });
 
 /**
  * POST /api/auth/setup
- * Krijon rolet dhe përdoruesin e parë Admin nëse nuk ekziston asnjë përdorues
+ * Create roles and the first administrator when no users exist.
  */
 router.post('/setup', async (req: Request, res: Response): Promise<void> => {
   if (process.env.NODE_ENV === 'production' && process.env.ALLOW_INITIAL_SETUP !== 'true') {
-    res.status(404).json({ error: 'Endpoint-i nuk u gjet' });
+    res.status(404).json({ error: 'Endpoint not found' });
     return;
   }
 
@@ -244,17 +245,17 @@ router.post('/setup', async (req: Request, res: Response): Promise<void> => {
   const email = normalizeEmail(req.body.email);
 
   if (!email || !password || !firstName || !lastName || !recoveryCode) {
-    res.status(400).json({ error: 'Të gjitha fushat janë të detyrueshme për regjistrimin e parë' });
+    res.status(400).json({ error: 'All fields are required for initial registration' });
     return;
   }
 
   if (!EMAIL_REGEX.test(email)) {
-    res.status(400).json({ error: 'Email-i nuk është i vlefshëm' });
+    res.status(400).json({ error: 'The email address is invalid' });
     return;
   }
 
   if (!validName(firstName) || !validName(lastName)) {
-    res.status(400).json({ error: 'Emri dhe mbiemri duhet të kenë 1 deri në 60 karaktere' });
+    res.status(400).json({ error: 'First and last name must contain between 1 and 60 characters' });
     return;
   }
 
@@ -265,14 +266,14 @@ router.post('/setup', async (req: Request, res: Response): Promise<void> => {
   }
 
   if (!validRecoveryCode(recoveryCode)) {
-    res.status(400).json({ error: `Kodi i rikuperimit duhet të ketë ${RECOVERY_CODE_MIN_LENGTH} deri në ${RECOVERY_CODE_MAX_LENGTH} karaktere` });
+    res.status(400).json({ error: `The recovery code must contain between ${RECOVERY_CODE_MIN_LENGTH} and ${RECOVERY_CODE_MAX_LENGTH} characters` });
     return;
   }
 
   try {
     const userCount = await prisma.user.count();
     if (userCount > 0) {
-      res.status(400).json({ error: 'Sistemi është konfiguruar tashmë. Nuk lejohet setup fillestar.' });
+      res.status(400).json({ error: 'The system is already configured. Initial setup is no longer available.' });
       return;
     }
 
@@ -285,7 +286,7 @@ router.post('/setup', async (req: Request, res: Response): Promise<void> => {
     await prisma.role.upsert({
       where: { name: 'USER' },
       update: {},
-      create: { name: 'USER', description: 'Punonjësi i thjeshtë me To-Do listën personale' },
+      create: { name: 'USER', description: 'Standard team member with a personal task list' },
     });
 
     const [passwordHash, recoveryCodeHash] = await Promise.all([
@@ -313,13 +314,13 @@ router.post('/setup', async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error) {
     console.error('Setup error:', error);
-    res.status(500).json({ error: 'Ndodhi një gabim gjatë setup-it të sistemit' });
+    res.status(500).json({ error: 'An error occurred during system setup' });
   }
 });
 
 /**
  * POST /api/auth/register-user
- * Krijimi i një përdoruesi të ri nga Admin-i
+ * Create a user as an administrator.
  */
 router.post('/register-user', authenticateToken, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
   const { password, roleName, recoveryCode } = req.body;
@@ -328,17 +329,17 @@ router.post('/register-user', authenticateToken, requireAdmin, async (req: AuthR
   const email = normalizeEmail(req.body.email);
 
   if (!email || !password || !firstName || !lastName || !roleName || !recoveryCode) {
-    res.status(400).json({ error: 'Të gjitha fushat janë të detyrueshme' });
+    res.status(400).json({ error: 'All fields are required' });
     return;
   }
 
   if (!EMAIL_REGEX.test(email)) {
-    res.status(400).json({ error: 'Email-i nuk është i vlefshëm' });
+    res.status(400).json({ error: 'The email address is invalid' });
     return;
   }
 
   if (!validName(firstName) || !validName(lastName)) {
-    res.status(400).json({ error: 'Emri dhe mbiemri duhet të kenë 1 deri në 60 karaktere' });
+    res.status(400).json({ error: 'First and last name must contain between 1 and 60 characters' });
     return;
   }
 
@@ -349,25 +350,25 @@ router.post('/register-user', authenticateToken, requireAdmin, async (req: AuthR
   }
 
   if (!validRecoveryCode(recoveryCode)) {
-    res.status(400).json({ error: `Kodi i rikuperimit duhet të ketë ${RECOVERY_CODE_MIN_LENGTH} deri në ${RECOVERY_CODE_MAX_LENGTH} karaktere` });
+    res.status(400).json({ error: `The recovery code must contain between ${RECOVERY_CODE_MIN_LENGTH} and ${RECOVERY_CODE_MAX_LENGTH} characters` });
     return;
   }
 
   if (roleName !== 'ADMIN' && roleName !== 'USER') {
-    res.status(400).json({ error: 'Roli i pavlefshëm. Lejohet vetëm ADMIN ose USER' });
+    res.status(400).json({ error: 'Invalid role. Only ADMIN or USER is allowed' });
     return;
   }
 
   try {
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
-      res.status(400).json({ error: 'Ekziston një përdorues me këtë email' });
+      res.status(400).json({ error: 'An account with this email already exists' });
       return;
     }
 
     const role = await prisma.role.findUnique({ where: { name: roleName } });
     if (!role) {
-      res.status(400).json({ error: 'Roli i kërkuar nuk ekziston në sistem' });
+      res.status(400).json({ error: 'The requested role does not exist' });
       return;
     }
 
@@ -388,30 +389,30 @@ router.post('/register-user', authenticateToken, requireAdmin, async (req: AuthR
     });
 
     res.status(201).json({
-      message: 'Përdoruesi u krijua me sukses',
+      message: 'User created successfully',
       user: publicUser(newUser, role.name),
     });
   } catch (error) {
     console.error('Register user error:', error);
-    res.status(500).json({ error: 'Ndodhi një gabim gjatë krijimit të përdoruesit' });
+    res.status(500).json({ error: 'An error occurred while creating the user' });
   }
 });
 
 /**
  * PUT /api/auth/change-password
- * Ndryshimi i fjalëkalimit
+ * Change password.
  */
 router.put('/change-password', authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
   const { currentPassword, newPassword } = req.body;
 
   if (!userId) {
-    res.status(401).json({ error: 'I paautorizuar' });
+    res.status(401).json({ error: 'Unauthorized' });
     return;
   }
 
   if (typeof currentPassword !== 'string' || typeof newPassword !== 'string' || !currentPassword || !newPassword) {
-    res.status(400).json({ error: 'Fjalëkalimi aktual dhe i ri janë të detyrueshëm' });
+    res.status(400).json({ error: 'The current and new passwords are required' });
     return;
   }
 
@@ -422,20 +423,20 @@ router.put('/change-password', authenticateToken, async (req: AuthRequest, res: 
   }
 
   if (newPassword === currentPassword) {
-    res.status(400).json({ error: 'Fjalëkalimi i ri duhet të jetë ndryshe nga fjalëkalimi aktual' });
+    res.status(400).json({ error: 'The new password must be different from the current password' });
     return;
   }
 
   try {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      res.status(404).json({ error: 'Përdoruesi nuk u gjet' });
+      res.status(404).json({ error: 'User not found' });
       return;
     }
 
     const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
     if (!isMatch) {
-      res.status(400).json({ error: 'Fjalëkalimi aktual është i gabuar' });
+      res.status(400).json({ error: 'The current password is incorrect' });
       return;
     }
 
@@ -448,18 +449,18 @@ router.put('/change-password', authenticateToken, async (req: AuthRequest, res: 
 
     setSessionCookie(res, signSessionToken(userId, nextSessionVersion));
 
-    await logActivity(userId, 'PASSWORD_CHANGED', 'Ndryshoi fjalëkalimin');
+    await logActivity(userId, 'PASSWORD_CHANGED', 'Changed password');
 
-    res.json({ message: 'Fjalëkalimi u ndryshua me sukses' });
+    res.json({ message: 'Password changed successfully' });
   } catch (error) {
     console.error('Change password error:', error);
-    res.status(500).json({ error: 'Ndodhi një gabim gjatë ndryshimit të fjalëkalimit' });
+    res.status(500).json({ error: 'An error occurred while changing the password' });
   }
 });
 
 /**
  * PUT /api/auth/users/:id/password
- * Admin-i vendos një fjalëkalim të ri për një përdorues dhe anulon sesionet e tij të vjetra.
+ * Allow an administrator to reset a user's password and revoke older sessions.
  */
 router.put('/users/:id/password', authenticateToken, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
   const adminId = req.user?.id;
@@ -467,15 +468,15 @@ router.put('/users/:id/password', authenticateToken, requireAdmin, async (req: A
   const { newPassword } = req.body;
 
   if (!adminId) {
-    res.status(401).json({ error: 'I paautorizuar' });
+    res.status(401).json({ error: 'Unauthorized' });
     return;
   }
   if (!targetUserId || typeof newPassword !== 'string') {
-    res.status(400).json({ error: 'Përdoruesi dhe fjalëkalimi i ri janë të detyrueshëm' });
+    res.status(400).json({ error: 'The user and new password are required' });
     return;
   }
   if (targetUserId === adminId) {
-    res.status(400).json({ error: 'Për llogarinë tënde përdor seksionin Siguria' });
+    res.status(400).json({ error: 'Use the Security section for your own account' });
     return;
   }
 
@@ -491,7 +492,7 @@ router.put('/users/:id/password', authenticateToken, requireAdmin, async (req: A
       select: { id: true, email: true, firstName: true, lastName: true },
     });
     if (!targetUser) {
-      res.status(404).json({ error: 'Përdoruesi nuk u gjet' });
+      res.status(404).json({ error: 'User not found' });
       return;
     }
 
@@ -502,22 +503,22 @@ router.put('/users/:id/password', authenticateToken, requireAdmin, async (req: A
     });
 
     await Promise.all([
-      logActivity(adminId, 'ADMIN_PASSWORD_RESET', `Ndryshoi fjalëkalimin e ${targetUser.email}`),
-      logActivity(targetUser.id, 'PASSWORD_RESET_BY_ADMIN', 'Fjalëkalimi u ndryshua nga administratori'),
+      logActivity(adminId, 'ADMIN_PASSWORD_RESET', `Changed the password for ${targetUser.email}`),
+      logActivity(targetUser.id, 'PASSWORD_RESET_BY_ADMIN', 'Password changed by an administrator'),
     ]);
 
     res.json({
-      message: `Fjalëkalimi i ${targetUser.firstName} ${targetUser.lastName} u ndryshua. Sesionet e vjetra u çaktivizuan.`,
+      message: `The password for ${targetUser.firstName} ${targetUser.lastName} was changed. Older sessions were revoked.`,
     });
   } catch (error) {
     console.error('Admin password reset error:', error);
-    res.status(500).json({ error: 'Ndodhi një gabim gjatë ndryshimit të fjalëkalimit' });
+    res.status(500).json({ error: 'An error occurred while changing the password' });
   }
 });
 
 /**
  * DELETE /api/auth/users/:id
- * Fshin llogarinë dhe të dhënat e lidhura. Kërkon fjalëkalimin aktual të Admin-it.
+ * Delete an account and its related data after verifying the administrator password.
  */
 router.delete('/users/:id', authenticateToken, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
   const adminId = req.user?.id;
@@ -525,15 +526,15 @@ router.delete('/users/:id', authenticateToken, requireAdmin, async (req: AuthReq
   const currentPassword = req.body?.currentPassword;
 
   if (!adminId) {
-    res.status(401).json({ error: 'I paautorizuar' });
+    res.status(401).json({ error: 'Unauthorized' });
     return;
   }
   if (!targetUserId || typeof currentPassword !== 'string' || !currentPassword) {
-    res.status(400).json({ error: 'Përdoruesi dhe fjalëkalimi aktual i Admin-it janë të detyrueshëm' });
+    res.status(400).json({ error: 'The user and current administrator password are required' });
     return;
   }
   if (targetUserId === adminId) {
-    res.status(400).json({ error: 'Nuk mund ta fshish llogarinë me të cilën je kyçur' });
+    res.status(400).json({ error: 'You cannot delete the account you are currently using' });
     return;
   }
 
@@ -546,11 +547,11 @@ router.delete('/users/:id', authenticateToken, requireAdmin, async (req: AuthReq
       }),
     ]);
     if (!admin || !(await bcrypt.compare(currentPassword, admin.passwordHash))) {
-      res.status(400).json({ error: 'Fjalëkalimi aktual i Admin-it është i gabuar' });
+      res.status(400).json({ error: 'The current administrator password is incorrect' });
       return;
     }
     if (!targetUser) {
-      res.status(404).json({ error: 'Përdoruesi nuk u gjet' });
+      res.status(404).json({ error: 'User not found' });
       return;
     }
 
@@ -588,15 +589,15 @@ router.delete('/users/:id', authenticateToken, requireAdmin, async (req: AuthReq
       prisma.user.delete({ where: { id: targetUser.id } }),
     ]);
     await removeUserFiles(attachments.map((attachment) => attachment.filePath));
-    await logActivity(adminId, 'ADMIN_USER_DELETED', `Fshiu llogarinë ${targetUser.email}`);
+    await logActivity(adminId, 'ADMIN_USER_DELETED', `Deleted the account ${targetUser.email}`);
 
     res.json({
-      message: `Llogaria e ${targetUser.firstName} ${targetUser.lastName} dhe të dhënat e lidhura u fshinë.`,
+      message: `The account for ${targetUser.firstName} ${targetUser.lastName} and its related data were deleted.`,
       deletedUserId: targetUser.id,
     });
   } catch (error) {
     console.error('Admin delete user error:', error);
-    res.status(500).json({ error: 'Ndodhi një gabim gjatë fshirjes së llogarisë' });
+    res.status(500).json({ error: 'An error occurred while deleting the account' });
   }
 });
 
@@ -608,15 +609,15 @@ router.put('/profile', authenticateToken, async (req: AuthRequest, res: Response
   const currentPassword = req.body.currentPassword;
 
   if (!userId) {
-    res.status(401).json({ error: 'I paautorizuar' });
+    res.status(401).json({ error: 'Unauthorized' });
     return;
   }
   if (!firstName || !lastName || !email || typeof currentPassword !== 'string') {
-    res.status(400).json({ error: 'Emri, mbiemri, email-i dhe fjalëkalimi aktual janë të detyrueshëm' });
+    res.status(400).json({ error: 'First name, last name, email, and current password are required' });
     return;
   }
   if (!validName(firstName) || !validName(lastName) || email.length > 254 || !EMAIL_REGEX.test(email)) {
-    res.status(400).json({ error: 'Të dhënat e profilit nuk janë të vlefshme' });
+    res.status(400).json({ error: 'The profile details are invalid' });
     return;
   }
 
@@ -626,11 +627,11 @@ router.put('/profile', authenticateToken, async (req: AuthRequest, res: Response
       prisma.user.findUnique({ where: { email } }),
     ]);
     if (!currentUser || !(await bcrypt.compare(currentPassword, currentUser.passwordHash))) {
-      res.status(400).json({ error: 'Fjalëkalimi aktual është i gabuar' });
+      res.status(400).json({ error: 'The current password is incorrect' });
       return;
     }
     if (existing && existing.id !== userId) {
-      res.status(409).json({ error: 'Ky email përdoret nga një llogari tjetër' });
+      res.status(409).json({ error: 'This email is used by another account' });
       return;
     }
     const user = await prisma.user.update({
@@ -638,11 +639,11 @@ router.put('/profile', authenticateToken, async (req: AuthRequest, res: Response
       data: { firstName, lastName, email },
       include: { role: true },
     });
-    await logActivity(userId, 'PROFILE_UPDATED', 'Përditësoi të dhënat e profilit');
-    res.json({ message: 'Profili u përditësua me sukses', user: publicUser(user) });
+    await logActivity(userId, 'PROFILE_UPDATED', 'Updated profile details');
+    res.json({ message: 'Profile updated successfully', user: publicUser(user) });
   } catch (error) {
     console.error('Update profile error:', error);
-    res.status(500).json({ error: 'Ndodhi një gabim gjatë përditësimit të profilit' });
+    res.status(500).json({ error: 'An error occurred while updating the profile' });
   }
 });
 
@@ -651,11 +652,11 @@ router.put('/preferences', authenticateToken, async (req: AuthRequest, res: Resp
   const { emailNotifications, inAppNotifications } = req.body;
 
   if (!userId) {
-    res.status(401).json({ error: 'I paautorizuar' });
+    res.status(401).json({ error: 'Unauthorized' });
     return;
   }
   if (typeof emailNotifications !== 'boolean' || typeof inAppNotifications !== 'boolean') {
-    res.status(400).json({ error: 'Preferencat e njoftimeve nuk janë të vlefshme' });
+    res.status(400).json({ error: 'Notification preferences are invalid' });
     return;
   }
 
@@ -665,18 +666,18 @@ router.put('/preferences', authenticateToken, async (req: AuthRequest, res: Resp
       data: { emailNotifications, inAppNotifications },
       include: { role: true },
     });
-    await logActivity(userId, 'NOTIFICATION_SETTINGS', 'Përditësoi preferencat e njoftimeve');
-    res.json({ message: 'Preferencat u ruajtën', user: publicUser(user) });
+    await logActivity(userId, 'NOTIFICATION_SETTINGS', 'Updated notification preferences');
+    res.json({ message: 'Preferences saved', user: publicUser(user) });
   } catch (error) {
     console.error('Update preferences error:', error);
-    res.status(500).json({ error: 'Ndodhi një gabim gjatë ruajtjes së preferencave' });
+    res.status(500).json({ error: 'An error occurred while saving preferences' });
   }
 });
 
 router.get('/activity', authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
   if (!userId) {
-    res.status(401).json({ error: 'I paautorizuar' });
+    res.status(401).json({ error: 'Unauthorized' });
     return;
   }
 
@@ -689,7 +690,7 @@ router.get('/activity', authenticateToken, async (req: AuthRequest, res: Respons
     res.json({ activities });
   } catch (error) {
     console.error('Activity history error:', error);
-    res.status(500).json({ error: 'Ndodhi një gabim gjatë leximit të aktivitetit' });
+    res.status(500).json({ error: 'An error occurred while retrieving activity history' });
   }
 });
 
@@ -698,27 +699,27 @@ router.put('/recovery-code', authenticateToken, async (req: AuthRequest, res: Re
   const { currentPassword, recoveryCode } = req.body;
 
   if (!userId) {
-    res.status(401).json({ error: 'I paautorizuar' });
+    res.status(401).json({ error: 'Unauthorized' });
     return;
   }
   if (typeof currentPassword !== 'string' || !validRecoveryCode(recoveryCode)) {
-    res.status(400).json({ error: `Shkruani fjalëkalimin aktual dhe një kod rikuperimi me ${RECOVERY_CODE_MIN_LENGTH} deri në ${RECOVERY_CODE_MAX_LENGTH} karaktere` });
+    res.status(400).json({ error: `Enter your current password and a recovery code containing ${RECOVERY_CODE_MIN_LENGTH} to ${RECOVERY_CODE_MAX_LENGTH} characters` });
     return;
   }
 
   try {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
-      res.status(400).json({ error: 'Fjalëkalimi aktual është i gabuar' });
+      res.status(400).json({ error: 'The current password is incorrect' });
       return;
     }
     const recoveryCodeHash = await bcrypt.hash(recoveryCode, BCRYPT_ROUNDS);
     await prisma.user.update({ where: { id: userId }, data: { recoveryCodeHash } });
-    await logActivity(userId, 'RECOVERY_CODE_UPDATED', 'Ndryshoi kodin e rikuperimit');
-    res.json({ message: 'Kodi i rikuperimit u ruajt me sukses', hasRecoveryCode: true });
+    await logActivity(userId, 'RECOVERY_CODE_UPDATED', 'Changed recovery code');
+    res.json({ message: 'Recovery code saved successfully', hasRecoveryCode: true });
   } catch (error) {
     console.error('Recovery code update error:', error);
-    res.status(500).json({ error: 'Ndodhi një gabim gjatë ruajtjes së kodit' });
+    res.status(500).json({ error: 'An error occurred while saving the recovery code' });
   }
 });
 
@@ -726,7 +727,7 @@ router.post('/forgot-password/verify', async (req: Request, res: Response): Prom
   const email = normalizeEmail(req.body.email);
   const recoveryCode = req.body.recoveryCode;
   if (!EMAIL_REGEX.test(email) || !validRecoveryCode(recoveryCode)) {
-    res.status(400).json({ error: 'Email-i ose kodi i rikuperimit nuk është i saktë' });
+    res.status(400).json({ error: 'The email or recovery code is incorrect' });
     return;
   }
 
@@ -734,14 +735,14 @@ router.post('/forgot-password/verify', async (req: Request, res: Response): Prom
     const user = await prisma.user.findUnique({ where: { email } });
     const matches = await bcrypt.compare(recoveryCode, user?.recoveryCodeHash || DUMMY_BCRYPT_HASH);
     if (!user || !matches) {
-      res.status(400).json({ error: 'Email-i ose kodi i rikuperimit nuk është i saktë' });
+    res.status(400).json({ error: 'The email or recovery code is incorrect' });
       return;
     }
     const resetToken = signPasswordResetToken(user.id, user.sessionVersion);
     res.json({ resetToken });
   } catch (error) {
     console.error('Forgot password verification error:', error);
-    res.status(500).json({ error: 'Ndodhi një gabim gjatë verifikimit' });
+    res.status(500).json({ error: 'An error occurred during verification' });
   }
 });
 
@@ -749,14 +750,14 @@ router.post('/reset-password', async (req: Request, res: Response): Promise<void
   const { resetToken, newPassword } = req.body;
   const invalidPassword = passwordError(newPassword);
   if (typeof resetToken !== 'string' || invalidPassword) {
-    res.status(400).json({ error: invalidPassword || 'Token-i i rikuperimit është i detyrueshëm' });
+    res.status(400).json({ error: invalidPassword || 'The recovery token is required' });
     return;
   }
 
   try {
     const payload = verifyToken(resetToken) as { userId?: string; purpose?: string; sessionVersion?: number };
     if (!payload.userId || payload.purpose !== 'password-reset' || typeof payload.sessionVersion !== 'number') {
-      res.status(400).json({ error: 'Kërkesa për rikuperim nuk është e vlefshme' });
+      res.status(400).json({ error: 'The recovery request is invalid' });
       return;
     }
     const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
@@ -765,13 +766,13 @@ router.post('/reset-password', async (req: Request, res: Response): Promise<void
       data: { passwordHash, sessionVersion: { increment: 1 } },
     });
     if (updated.count !== 1) {
-      res.status(400).json({ error: 'Ky token rikuperimi është përdorur ose ka skaduar' });
+      res.status(400).json({ error: 'This recovery token has already been used or has expired' });
       return;
     }
-    await logActivity(payload.userId, 'PASSWORD_RESET', 'Rivendosi fjalëkalimin me kodin e rikuperimit');
-    res.json({ message: 'Fjalëkalimi u rivendos. Tani mund të kyçeni.' });
+    await logActivity(payload.userId, 'PASSWORD_RESET', 'Reset password with a recovery code');
+    res.json({ message: 'Password reset successfully. You can now sign in.' });
   } catch (error) {
-    res.status(400).json({ error: 'Kërkesa për rikuperim ka skaduar ose nuk është e vlefshme' });
+    res.status(400).json({ error: 'The recovery request has expired or is invalid' });
   }
 });
 

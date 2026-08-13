@@ -349,6 +349,30 @@ h1, h2, h3, h4, h5, h6 {
   gap: 16px;
 }
 
+.nav-my-tasks {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  background: hsl(var(--bg-primary));
+  color: hsl(var(--text-secondary));
+  font: inherit;
+  font-size: .86rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.nav-my-tasks:hover,
+.nav-my-tasks.active {
+  color: hsl(var(--primary));
+  border-color: hsl(var(--primary) / .35);
+  background: hsl(var(--primary) / .09);
+}
+
 .user-badge {
   background-color: hsl(var(--border-muted));
   border: 1px solid hsl(var(--border-light));
@@ -916,6 +940,8 @@ body.light-mode {
   .tasks-layout { grid-template-columns: 1fr !important; }
   .navbar { padding: 0 12px; }
   .nav-user { gap: 8px; }
+  .nav-my-tasks { width: 38px; padding: 7px; justify-content: center; }
+  .nav-my-tasks span { display: none; }
   .user-badge { display: none; }
   .modal-overlay { padding: 10px; }
   .modal-content { width: 100%; max-width: 100% !important; margin: 0; }

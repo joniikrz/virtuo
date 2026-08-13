@@ -64,7 +64,7 @@ const upload = multer({
   fileFilter: (_req, file, done) => {
     const extension = path.extname(file.originalname).toLowerCase();
     if (!uploadMimeByExtension[extension]) {
-      done(uploadValidationError('Ky lloj skedari nuk lejohet'));
+      done(uploadValidationError('This file type is not allowed'));
       return;
     }
     done(null, true);
@@ -121,13 +121,13 @@ async function createAssignmentNotifications(task: any, onlyUserIds?: Set<string
         userId: user.id,
         taskId: task.id,
         type: 'TASK_ASSIGNED',
-        title: 'Detyrë e re',
-        message: `Ju është caktuar detyra: ${task.title}`,
+        title: 'New task',
+        message: `You were assigned the task: ${task.title}`,
       })),
     });
   }
-  // Gmail kufizon lidhjet paralele. Pool-i dhe radha sekuenciale sigurojnë që çdo marrës
-  // të përpunohet pa e mbajtur hapur kërkesën e krijimit të taskut.
+  // Gmail limits parallel connections. The pool and sequential queue ensure every recipient
+  // is processed without keeping the task creation request open.
   const emailRecipients = recipients.filter((user: any) => user.emailNotifications);
   void (async () => {
     for (const user of emailRecipients) {
@@ -148,12 +148,12 @@ async function createCompletionNotification(task: any, completedBy: string) {
   if (task.createdBy.id === completedBy) return;
   if (task.createdBy.inAppNotifications) {
     await prisma.notification.create({
-      data: { userId: task.createdBy.id, taskId: task.id, type: 'TASK_COMPLETED', title: 'Detyrë e përfunduar', message: `Detyra u përfundua: ${task.title}` },
+      data: { userId: task.createdBy.id, taskId: task.id, type: 'TASK_COMPLETED', title: 'Task completed', message: `Task completed: ${task.title}` },
     });
   }
   const completedByNames = task.assignees?.length
     ? task.assignees.map((assignment: any) => `${assignment.user.firstName} ${assignment.user.lastName}`).join(', ')
-    : task.assignedTo ? `${task.assignedTo.firstName} ${task.assignedTo.lastName}` : 'Një anëtar';
+    : task.assignedTo ? `${task.assignedTo.firstName} ${task.assignedTo.lastName}` : 'A member';
   if (task.createdBy.emailNotifications) {
     void sendTaskCompletedEmail(
       task.createdBy.email,
@@ -191,14 +191,14 @@ async function createTaskActivityNotifications(
         type: isComment ? 'COMMENT_ADDED' : 'ATTACHMENT_ADDED',
         title: isComment ? 'Koment i ri' : 'Skedar i ri',
         message: isComment
-          ? `${actorName} komentoi në detyrën: ${task.title}`
-          : `${actorName} bashkëngjiti një skedar në detyrën: ${task.title}`,
+          ? `${actorName} commented on the task: ${task.title}`
+          : `${actorName} attached a file to the task: ${task.title}`,
         resourceType: activity,
         resourceId,
       })),
     });
   } catch (error) {
-    // Komenti/skedari mbetet funksional edhe nëse shërbimi i njoftimeve ka problem të përkohshëm.
+    // Comments and files remain functional even if the notification service is temporarily unavailable.
     console.error('Task activity notification error:', error);
   }
 }
@@ -230,7 +230,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   } catch (error) {
     if (error instanceof AccessDeniedError) return res.status(403).json({ error: error.message });
     console.error('Fetch tasks error:', error);
-    return res.status(500).json({ error: 'Gabim gjatë marrjes së detyrave' });
+    return res.status(500).json({ error: 'An error occurred while retrieving tasks' });
   }
 });
 
@@ -239,12 +239,12 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
   try {
     const access = await taskAccess(req.params.id, userId, true);
-    if (!access.task || !access.canView) return res.status(404).json({ error: 'Detyra nuk u gjet' });
+    if (!access.task || !access.canView) return res.status(404).json({ error: 'Task not found' });
     res.setHeader('Cache-Control', 'private, no-cache');
     return res.json(access.task);
   } catch (error) {
     console.error('Fetch task detail error:', error);
-    return res.status(500).json({ error: 'Gabim gjatë marrjes së detyrës' });
+    return res.status(500).json({ error: 'An error occurred while retrieving the task' });
   }
 });
 
@@ -256,17 +256,17 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   const { status = 'TODO', priority = 'NORMAL', deadline } = req.body;
   const assignedToIds = parseAssigneeIds(req.body.assignedToIds, req.body.assignedToId);
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
-  if (!title || typeof spaceId !== 'string' || assignedToIds.length === 0) return res.status(400).json({ error: 'Titulli, hapësira dhe së paku një person i caktuar janë të detyrueshëm' });
-  if (title.length > 160 || description.length > 10_000) return res.status(400).json({ error: 'Titulli ose përshkrimi është shumë i gjatë' });
-  if (assignedToIds.length > 100) return res.status(400).json({ error: 'Një detyrë mund t’u caktohet maksimumi 100 anëtarëve' });
+  if (!title || typeof spaceId !== 'string' || assignedToIds.length === 0) return res.status(400).json({ error: 'A title, workspace, and at least one assignee are required' });
+  if (title.length > 160 || description.length > 10_000) return res.status(400).json({ error: 'The title or description is too long' });
+  if (assignedToIds.length > 100) return res.status(400).json({ error: 'A task can be assigned to at most 100 members' });
   const parsedDeadline = parseTaskDeadline(deadline);
-  if (!parsedDeadline) return res.status(400).json({ error: 'Afati i fundit nuk është i vlefshëm' });
-  if (!isTaskStatus(status) || !isTaskPriority(priority)) return res.status(400).json({ error: 'Statusi ose prioriteti nuk është i vlefshëm' });
+  if (!parsedDeadline) return res.status(400).json({ error: 'The deadline is invalid' });
+  if (!isTaskStatus(status) || !isTaskPriority(priority)) return res.status(400).json({ error: 'The status or priority is invalid' });
   try {
     const access = await spaceAccess(spaceId, userId);
-    if (!access.isMember) return res.status(403).json({ error: 'Duhet të jeni anëtar i hapësirës për të krijuar detyra' });
+    if (!access.isMember) return res.status(403).json({ error: 'You must be a workspace member to create tasks' });
     const memberCount = await prisma.spaceMember.count({ where: { spaceId, userId: { in: assignedToIds } } });
-    if (memberCount !== assignedToIds.length) return res.status(400).json({ error: 'Të gjithë personat e caktuar duhet të jenë anëtarë të hapësirës' });
+    if (memberCount !== assignedToIds.length) return res.status(400).json({ error: 'Every assignee must be a workspace member' });
     const task = await prisma.task.create({
       data: {
         title, description, status, priority, deadline: parsedDeadline, spaceId, createdById: userId,
@@ -277,36 +277,36 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
     });
     await createAssignmentNotifications(task);
     return res.status(201).json(task);
-  } catch (error) { console.error('Create task error:', error); return res.status(500).json({ error: 'Gabim gjatë krijimit të detyrës' }); }
+  } catch (error) { console.error('Create task error:', error); return res.status(500).json({ error: 'An error occurred while creating the task' }); }
 });
 
 router.put('/:id/status', authenticateToken, async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
-  if (!isTaskStatus(req.body.status)) return res.status(400).json({ error: 'Status i pavlefshëm' });
+  if (!isTaskStatus(req.body.status)) return res.status(400).json({ error: 'Invalid status' });
   try {
     const access = await taskAccess(req.params.id, userId);
-    if (!access.task) return res.status(404).json({ error: 'Detyra nuk u gjet' });
-    if (!access.canView) return res.status(403).json({ error: 'Nuk keni leje të ndryshoni statusin' });
+    if (!access.task) return res.status(404).json({ error: 'Task not found' });
+    if (!access.canView) return res.status(403).json({ error: 'You do not have permission to change the status' });
     const updated = await prisma.task.update({ where: { id: access.task.id }, data: { status: req.body.status }, include: taskInclude });
     if (access.task.status !== 'COMPLETED' && updated.status === 'COMPLETED') await createCompletionNotification(access.task, userId);
     return res.json(updated);
-  } catch (error) { console.error('Update status error:', error); return res.status(500).json({ error: 'Gabim gjatë përditësimit të statusit' }); }
+  } catch (error) { console.error('Update status error:', error); return res.status(500).json({ error: 'An error occurred while updating the status' }); }
 });
 
 router.post('/:id/attachments', authenticateToken, upload.single('file'), async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
-  if (!userId || !req.file) return res.status(400).json({ error: 'Skedari është i detyrueshëm' });
+  if (!userId || !req.file) return res.status(400).json({ error: 'A file is required' });
   try {
     if (!(await validStoredFile(req.file))) {
       await fs.promises.unlink(req.file.path).catch(() => undefined);
-      return res.status(400).json({ error: 'Përmbajtja e skedarit nuk përputhet me formatin e lejuar' });
+      return res.status(400).json({ error: 'The file content does not match an allowed format' });
     }
     const access = await taskAccess(req.params.id, userId);
     if (!access.task || !access.canView) {
       await fs.promises.unlink(req.file.path).catch(() => undefined);
-      if (!access.task) return res.status(404).json({ error: 'Detyra nuk u gjet' });
-      return res.status(403).json({ error: 'Nuk keni leje të ngarkoni skedarë' });
+      if (!access.task) return res.status(404).json({ error: 'Task not found' });
+      return res.status(403).json({ error: 'You do not have permission to upload files' });
     }
     const extension = path.extname(req.file.originalname).toLowerCase();
     const attachment = await prisma.attachment.create({
@@ -317,12 +317,12 @@ router.post('/:id/attachments', authenticateToken, upload.single('file'), async 
     const actor = access.task.createdById === userId
       ? access.task.createdBy
       : access.task.assignees.find((assignment) => assignment.userId === userId)?.user || access.task.assignedTo;
-    await createTaskActivityNotifications(access.task, userId, `${actor?.firstName || ''} ${actor?.lastName || ''}`.trim() || 'Një anëtar', 'ATTACHMENT', attachment.id);
+    await createTaskActivityNotifications(access.task, userId, `${actor?.firstName || ''} ${actor?.lastName || ''}`.trim() || 'A member', 'ATTACHMENT', attachment.id);
     return res.status(201).json(attachment);
   } catch (error) {
     await fs.promises.unlink(req.file.path).catch(() => undefined);
     console.error('Upload attachment error:', error);
-    return res.status(500).json({ error: 'Gabim gjatë ngarkimit të skedarit' });
+    return res.status(500).json({ error: 'An error occurred while uploading the file' });
   }
 });
 
@@ -330,9 +330,9 @@ router.get('/:id/attachments/:attachmentId', authenticateToken, async (req: Auth
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
   const access = await taskAccess(req.params.id, userId);
-  if (!access.task || !access.canView) return res.status(404).json({ error: 'Skedari nuk u gjet' });
+  if (!access.task || !access.canView) return res.status(404).json({ error: 'File not found' });
   const attachment = await prisma.attachment.findFirst({ where: { id: req.params.attachmentId, taskId: access.task.id } });
-  if (!attachment) return res.status(404).json({ error: 'Skedari nuk u gjet' });
+  if (!attachment) return res.status(404).json({ error: 'File not found' });
   res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
   res.setHeader('X-Content-Type-Options', 'nosniff');
   return res.download(attachment.filePath, attachment.fileName);
@@ -343,11 +343,11 @@ router.delete('/:id/attachments/:attachmentId', authenticateToken, async (req: A
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
   try {
     const access = await taskAccess(req.params.id, userId);
-    if (!access.task || !access.canView) return res.status(404).json({ error: 'Skedari nuk u gjet' });
+    if (!access.task || !access.canView) return res.status(404).json({ error: 'File not found' });
     const attachment = await prisma.attachment.findFirst({ where: { id: req.params.attachmentId, taskId: access.task.id } });
-    if (!attachment) return res.status(404).json({ error: 'Skedari nuk u gjet' });
+    if (!attachment) return res.status(404).json({ error: 'File not found' });
     if (attachment.uploadedById !== userId && access.task.createdById !== userId) {
-      return res.status(403).json({ error: 'Vetëm ngarkuesi ose krijuesi i detyrës mund ta fshijë skedarin' });
+      return res.status(403).json({ error: 'Only the uploader or task creator can delete this file' });
     }
     await prisma.$transaction([
       prisma.notification.deleteMany({ where: { resourceType: 'ATTACHMENT', resourceId: attachment.id } }),
@@ -355,10 +355,10 @@ router.delete('/:id/attachments/:attachmentId', authenticateToken, async (req: A
       prisma.task.update({ where: { id: access.task.id }, data: { updatedAt: new Date() } }),
     ]);
     await removeTaskFiles([attachment.filePath]);
-    return res.json({ message: 'Skedari u fshi me sukses' });
+    return res.json({ message: 'File deleted successfully' });
   } catch (error) {
     console.error('Delete attachment error:', error);
-    return res.status(500).json({ error: 'Gabim gjatë fshirjes së skedarit' });
+    return res.status(500).json({ error: 'An error occurred while deleting the file' });
   }
 });
 
@@ -366,12 +366,12 @@ router.post('/:id/comments', authenticateToken, async (req: AuthRequest, res: Re
   const userId = req.user?.id;
   const content = typeof req.body.content === 'string' ? req.body.content.trim() : '';
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
-  if (!content) return res.status(400).json({ error: 'Komenti nuk mund të jetë bosh' });
-  if (content.length > 2000) return res.status(400).json({ error: 'Komenti mund të ketë maksimumi 2000 karaktere' });
+  if (!content) return res.status(400).json({ error: 'The comment cannot be empty' });
+  if (content.length > 2000) return res.status(400).json({ error: 'The comment can contain at most 2,000 characters' });
   try {
     const access = await taskAccess(req.params.id, userId);
-    if (!access.task) return res.status(404).json({ error: 'Detyra nuk u gjet' });
-    if (!access.canView) return res.status(403).json({ error: 'Nuk keni leje të komentoni këtë detyrë' });
+    if (!access.task) return res.status(404).json({ error: 'Task not found' });
+    if (!access.canView) return res.status(403).json({ error: 'You do not have permission to comment on this task' });
     const comment = await prisma.comment.create({
       data: { taskId: access.task.id, authorId: userId, content },
       include: { author: { select: { id: true, firstName: true, lastName: true, role: { select: { name: true } } } } },
@@ -387,7 +387,7 @@ router.post('/:id/comments', authenticateToken, async (req: AuthRequest, res: Re
     return res.status(201).json({ ...comment, author: { ...comment.author, role: comment.author.role.name } });
   } catch (error) {
     console.error('Create comment error:', error);
-    return res.status(500).json({ error: 'Gabim gjatë krijimit të komentit' });
+    return res.status(500).json({ error: 'An error occurred while creating the comment' });
   }
 });
 
@@ -396,21 +396,21 @@ router.delete('/:id/comments/:commentId', authenticateToken, async (req: AuthReq
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
   try {
     const access = await taskAccess(req.params.id, userId);
-    if (!access.task || !access.canView) return res.status(404).json({ error: 'Komenti nuk u gjet' });
+    if (!access.task || !access.canView) return res.status(404).json({ error: 'Comment not found' });
     const comment = await prisma.comment.findFirst({ where: { id: req.params.commentId, taskId: access.task.id } });
-    if (!comment) return res.status(404).json({ error: 'Komenti nuk u gjet' });
+    if (!comment) return res.status(404).json({ error: 'Comment not found' });
     if (comment.authorId !== userId && access.task.createdById !== userId) {
-      return res.status(403).json({ error: 'Vetëm autori ose krijuesi i detyrës mund ta fshijë komentin' });
+      return res.status(403).json({ error: 'Only the author or task creator can delete this comment' });
     }
     await prisma.$transaction([
       prisma.notification.deleteMany({ where: { resourceType: 'COMMENT', resourceId: comment.id } }),
       prisma.comment.delete({ where: { id: comment.id } }),
       prisma.task.update({ where: { id: access.task.id }, data: { updatedAt: new Date() } }),
     ]);
-    return res.json({ message: 'Komenti u fshi me sukses' });
+    return res.json({ message: 'Comment deleted successfully' });
   } catch (error) {
     console.error('Delete comment error:', error);
-    return res.status(500).json({ error: 'Gabim gjatë fshirjes së komentit' });
+    return res.status(500).json({ error: 'An error occurred while deleting the comment' });
   }
 });
 
@@ -422,20 +422,20 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
   const assignedToIds = parseAssigneeIds(req.body.assignedToIds, req.body.assignedToId);
   const normalizedTitle = typeof title === 'string' ? title.trim() : undefined;
   const normalizedDescription = typeof description === 'string' ? description.trim() : undefined;
-  if (status !== undefined && !isTaskStatus(status) || priority !== undefined && !isTaskPriority(priority)) return res.status(400).json({ error: 'Statusi ose prioriteti nuk është i vlefshëm' });
-  if (hasAssignmentUpdate && assignedToIds.length === 0) return res.status(400).json({ error: 'Së paku një person i caktuar është i detyrueshëm' });
-  if (hasAssignmentUpdate && assignedToIds.length > 100) return res.status(400).json({ error: 'Një detyrë mund t’u caktohet maksimumi 100 anëtarëve' });
-  if (title !== undefined && (!normalizedTitle || normalizedTitle.length > 160)) return res.status(400).json({ error: 'Titulli duhet të ketë 1 deri në 160 karaktere' });
-  if (description !== undefined && (normalizedDescription === undefined || normalizedDescription.length > 10_000)) return res.status(400).json({ error: 'Përshkrimi mund të ketë maksimumi 10000 karaktere' });
+  if (status !== undefined && !isTaskStatus(status) || priority !== undefined && !isTaskPriority(priority)) return res.status(400).json({ error: 'The status or priority is invalid' });
+  if (hasAssignmentUpdate && assignedToIds.length === 0) return res.status(400).json({ error: 'At least one assignee is required' });
+  if (hasAssignmentUpdate && assignedToIds.length > 100) return res.status(400).json({ error: 'A task can be assigned to at most 100 members' });
+  if (title !== undefined && (!normalizedTitle || normalizedTitle.length > 160)) return res.status(400).json({ error: 'The title must contain between 1 and 160 characters' });
+  if (description !== undefined && (normalizedDescription === undefined || normalizedDescription.length > 10_000)) return res.status(400).json({ error: 'The description can contain at most 10,000 characters' });
   const parsedDeadline = deadline === undefined ? undefined : parseTaskDeadline(deadline);
-  if (deadline !== undefined && !parsedDeadline) return res.status(400).json({ error: 'Afati i fundit nuk është i vlefshëm' });
+  if (deadline !== undefined && !parsedDeadline) return res.status(400).json({ error: 'The deadline is invalid' });
   try {
     const access = await taskAccess(req.params.id, userId);
-    if (!access.task) return res.status(404).json({ error: 'Detyra nuk u gjet' });
-    if (!access.canManage) return res.status(403).json({ error: 'Nuk keni leje të përditësoni detyrën' });
+    if (!access.task) return res.status(404).json({ error: 'Task not found' });
+    if (!access.canManage) return res.status(403).json({ error: 'You do not have permission to update this task' });
     if (hasAssignmentUpdate) {
       const memberCount = await prisma.spaceMember.count({ where: { spaceId: access.task.spaceId, userId: { in: assignedToIds } } });
-      if (memberCount !== assignedToIds.length) return res.status(400).json({ error: 'Të gjithë personat e caktuar duhet të jenë anëtarë të hapësirës' });
+      if (memberCount !== assignedToIds.length) return res.status(400).json({ error: 'Every assignee must be a workspace member' });
     }
     const previousAssigneeIds = new Set([
       ...access.task.assignees.map((assignment) => assignment.userId),
@@ -462,7 +462,7 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
     }
     if (access.task.status !== 'COMPLETED' && updated.status === 'COMPLETED') await createCompletionNotification(access.task, userId);
     return res.json(updated);
-  } catch (error) { console.error('Update task error:', error); return res.status(500).json({ error: 'Gabim gjatë përditësimit të detyrës' }); }
+  } catch (error) { console.error('Update task error:', error); return res.status(500).json({ error: 'An error occurred while updating the task' }); }
 });
 
 router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -470,16 +470,16 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
   try {
     const access = await taskAccess(req.params.id, userId);
-    if (!access.task) return res.status(404).json({ error: 'Detyra nuk u gjet' });
-    if (access.task.createdById !== userId) return res.status(403).json({ error: 'Vetëm krijuesi i detyrës mund ta fshijë' });
+    if (!access.task) return res.status(404).json({ error: 'Task not found' });
+    if (access.task.createdById !== userId) return res.status(403).json({ error: 'Only the task creator can delete it' });
     const attachments = await prisma.attachment.findMany({ where: { taskId: access.task.id }, select: { filePath: true } });
     await prisma.$transaction([
       prisma.notification.deleteMany({ where: { taskId: access.task.id } }),
       prisma.task.delete({ where: { id: access.task.id } }),
     ]);
     await removeTaskFiles(attachments.map((attachment) => attachment.filePath));
-    return res.json({ message: 'Detyra u fshi me sukses' });
-  } catch (error) { console.error('Delete task error:', error); return res.status(500).json({ error: 'Gabim gjatë fshirjes së detyrës' }); }
+    return res.json({ message: 'Task deleted successfully' });
+  } catch (error) { console.error('Delete task error:', error); return res.status(500).json({ error: 'An error occurred while deleting the task' }); }
 });
 
 export default router;

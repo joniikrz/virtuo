@@ -10,9 +10,9 @@ interface TaskBoardProps {
 }
 
 const columns = [
-  { status: 'TODO', label: "Për t'u bërë", icon: Clock, className: 'task-column--todo' },
-  { status: 'IN_PROGRESS', label: 'Në proces', icon: Play, className: 'task-column--progress' },
-  { status: 'COMPLETED', label: 'Të përfunduara', icon: CheckCircle2, className: 'task-column--completed' },
+  { status: 'TODO', label: 'To do', icon: Clock, className: 'task-column--todo' },
+  { status: 'IN_PROGRESS', label: 'In progress', icon: Play, className: 'task-column--progress' },
+  { status: 'COMPLETED', label: 'Completed', icon: CheckCircle2, className: 'task-column--completed' },
 ];
 
 export default function TaskBoard({ tasks, onTaskClick, statusFilter = 'ALL' }: TaskBoardProps) {
@@ -36,7 +36,7 @@ export default function TaskBoard({ tasks, onTaskClick, statusFilter = 'ALL' }: 
               {columnTasks.length === 0 && (
                 <div className="task-column__empty">
                   <Inbox size={20} />
-                  <span>Nuk u gjet asnjë detyrë</span>
+                  <span>No tasks found</span>
                 </div>
               )}
             </div>

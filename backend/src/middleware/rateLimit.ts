@@ -40,7 +40,7 @@ export function rateLimit({ windowMs, max, scope, keyGenerator, skipSuccessfulRe
       const retryAfter = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
       res.setHeader('Retry-After', String(retryAfter));
       res.status(429).json({
-        error: `Ke bërë shumë tentativa për këtë llogari. Provo përsëri pas ${Math.ceil(retryAfter / 60)} minutash.`,
+        error: `Too many attempts for this account. Try again in ${Math.ceil(retryAfter / 60)} minutes.`,
         retryAfter,
       });
       return;

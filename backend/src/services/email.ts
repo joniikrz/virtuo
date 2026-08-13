@@ -11,7 +11,7 @@ const transporter = smtpConfigured
       pool: true,
       host: smtpHost,
       port: Number(process.env.SMTP_PORT) || 587,
-      secure: process.env.SMTP_SECURE === 'true', // true për 465, false për STARTTLS/587
+      secure: process.env.SMTP_SECURE === 'true', // true for 465, false for STARTTLS/587
       auth: { user: smtpUser, pass: smtpPass },
       requireTLS: process.env.SMTP_REQUIRE_TLS !== 'false',
       tls: {
@@ -33,7 +33,7 @@ let missingConfigurationLogged = false;
 function logMissingConfigurationOnce() {
   if (missingConfigurationLogged) return;
   missingConfigurationLogged = true;
-  console.warn('[SMTP] Email-et janë çaktivizuar: plotëso SMTP_HOST, SMTP_USER, SMTP_PASS dhe SMTP_FROM.');
+  console.warn('[SMTP] Email is disabled: set SMTP_HOST, SMTP_USER, SMTP_PASS, and SMTP_FROM.');
 }
 
 export function isEmailConfigured(): boolean {
@@ -51,8 +51,8 @@ export async function verifyEmailTransport(): Promise<boolean> {
     console.log(`[SMTP] Lidhja u verifikua me sukses te ${smtpHost}:${process.env.SMTP_PORT || '587'}.`);
     return true;
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Gabim i panjohur SMTP';
-    console.error(`[SMTP] Verifikimi dështoi: ${message}`);
+    const message = error instanceof Error ? error.message : 'Unknown SMTP error';
+    console.error(`[SMTP] Verification failed: ${message}`);
     return false;
   }
 }
@@ -86,14 +86,14 @@ function taskButton(taskId: string): string {
   if (!taskUrl) return '';
   return `
     <p style="margin: 24px 0; text-align: center;">
-      <a href="${escapeHtml(taskUrl)}" style="display: inline-block; padding: 12px 20px; color: #ffffff; background: #6d4aff; border-radius: 8px; font-weight: 700; text-decoration: none;">Hape detyrën në Virtuo</a>
+      <a href="${escapeHtml(taskUrl)}" style="display: inline-block; padding: 12px 20px; color: #ffffff; background: #6d4aff; border-radius: 8px; font-weight: 700; text-decoration: none;">Open task in Virtuo</a>
     </p>
-    <p style="font-size: 12px; color: #777; word-break: break-all;">Nëse butoni nuk hapet, përdor këtë link:<br><a href="${escapeHtml(taskUrl)}">${escapeHtml(taskUrl)}</a></p>
+    <p style="font-size: 12px; color: #777; word-break: break-all;">If the button does not open, use this link:<br><a href="${escapeHtml(taskUrl)}">${escapeHtml(taskUrl)}</a></p>
   `;
 }
 
 /**
- * Dërgon një njoftim me email kur një punonjësi i caktohet një detyrë e re.
+ * Send an email when a team member receives a new task.
  */
 export async function sendTaskAssignedEmail(toEmail: string, employeeName: string, taskTitle: string, creatorName: string, deadline: Date, taskId: string): Promise<boolean> {
   if (!transporter) {
@@ -113,20 +113,20 @@ export async function sendTaskAssignedEmail(toEmail: string, employeeName: strin
     const info = await transporter.sendMail({
       from: defaultFrom,
       to: toEmail,
-      subject: `Detyrë e Re: ${safeSubject(taskTitle)}`,
+      subject: `New Task: ${safeSubject(taskTitle)}`,
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px;">
-          <h2 style="color: #4A90E2; border-bottom: 2px solid #f5f5f5; padding-bottom: 10px;">Detyrë e re në Virtuo</h2>
-          <p>Përshëndetje <strong>${safeEmployeeName}</strong>,</p>
-          <p>Menaxheri <strong>${safeCreatorName}</strong> ju ka caktuar një detyrë të re:</p>
+          <h2 style="color: #4A90E2; border-bottom: 2px solid #f5f5f5; padding-bottom: 10px;">New task in Virtuo</h2>
+          <p>Hello <strong>${safeEmployeeName}</strong>,</p>
+          <p><strong>${safeCreatorName}</strong> assigned you a new task:</p>
           <div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #4A90E2; margin: 20px 0; border-radius: 0 4px 4px 0;">
             <h3 style="margin-top: 0; color: #333;">${safeTaskTitle}</h3>
             <p style="margin-bottom: 0; font-size: 14px; color: #666;"><strong>Afati i fundit:</strong> ${formattedDeadline}</p>
           </div>
-          <p>Ju lutemi hyni në sistem për të parë detajet dhe për të filluar punën.</p>
+          <p>Sign in to view the details and get started.</p>
           ${taskButton(taskId)}
           <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
-          <p style="font-size: 12px; color: #999; text-align: center;">Ky është një email automatik nga sistemi Virtuo. Ju lutemi mos u përgjigjni.</p>
+          <p style="font-size: 12px; color: #999; text-align: center;">This is an automated email from Virtuo. Please do not reply.</p>
         </div>
       `,
     });
@@ -139,7 +139,7 @@ export async function sendTaskAssignedEmail(toEmail: string, employeeName: strin
 }
 
 /**
- * Dërgon një njoftim me email te menaxheri kur punonjësi përfundon një detyrë.
+ * Notify the creator when a team member completes a task.
  */
 export async function sendTaskCompletedEmail(toEmail: string, managerName: string, taskTitle: string, employeeName: string, taskId: string): Promise<boolean> {
   if (!transporter) {
@@ -154,19 +154,19 @@ export async function sendTaskCompletedEmail(toEmail: string, managerName: strin
     const info = await transporter.sendMail({
       from: defaultFrom,
       to: toEmail,
-      subject: `Detyra u Përfundua: ${safeSubject(taskTitle)}`,
+      subject: `Task Completed: ${safeSubject(taskTitle)}`,
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px;">
-          <h2 style="color: #2ECC71; border-bottom: 2px solid #f5f5f5; padding-bottom: 10px;">Detyra u Përfundua</h2>
-          <p>Përshëndetje <strong>${safeManagerName}</strong>,</p>
-          <p>Punonjësi <strong>${safeEmployeeName}</strong> ka shënuar si të përfunduar detyrën që ju keni krijuar:</p>
+          <h2 style="color: #2ECC71; border-bottom: 2px solid #f5f5f5; padding-bottom: 10px;">Task Completed</h2>
+          <p>Hello <strong>${safeManagerName}</strong>,</p>
+          <p><strong>${safeEmployeeName}</strong> marked a task you created as completed:</p>
           <div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #2ECC71; margin: 20px 0; border-radius: 0 4px 4px 0;">
             <h3 style="margin-top: 0; color: #333;">${safeTaskTitle}</h3>
           </div>
-          <p>Ju lutemi hyni në sistemin Virtuo për të rishikuar punën e kryer dhe shtojcat nëse ka.</p>
+          <p>Sign in to Virtuo to review the completed work and any attachments.</p>
           ${taskButton(taskId)}
           <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
-          <p style="font-size: 12px; color: #999; text-align: center;">Ky është një email automatik nga sistemi Virtuo. Ju lutemi mos u përgjigjni.</p>
+          <p style="font-size: 12px; color: #999; text-align: center;">This is an automated email from Virtuo. Please do not reply.</p>
         </div>
       `,
     });

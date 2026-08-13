@@ -7,26 +7,41 @@ export interface AuthRequest extends Request {
   user?: AuthenticatedUser;
 }
 
+function requestToken(req: Request): string | undefined {
+  const cookieToken = req.cookies?.token;
+  if (typeof cookieToken === 'string' && cookieToken) return cookieToken;
+  const authorization = req.headers.authorization;
+  return authorization?.startsWith('Bearer ') ? authorization.substring(7) : undefined;
+}
+
+export const optionalAuthenticateToken = async (
+  req: AuthRequest,
+  _res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  const token = requestToken(req);
+  if (!token) return next();
+  try {
+    const result = await application.authenticateSession.execute(token);
+    if (result.ok) req.user = result.user;
+  } catch {
+    // A session probe is allowed to resolve as anonymous.
+  }
+  next();
+};
+
 /**
- * Middleware për verifikimin e Token-it JWT
+ * JWT authentication middleware.
  */
 export const authenticateToken = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
-  // Lexo tokenin nga Cookie ose nga Header-i Authorization
-  let token = req.cookies?.token;
-
-  if (!token && req.headers.authorization) {
-    const authHeader = req.headers.authorization;
-    if (authHeader.startsWith('Bearer ')) {
-      token = authHeader.substring(7);
-    }
-  }
+  const token = requestToken(req);
 
   if (!token) {
-    res.status(401).json({ error: 'Nuk jeni i autorizuar. Ju lutem kyçuni.' });
+    res.status(401).json({ error: 'You are not authorized. Please sign in.' });
     return;
   }
 
@@ -34,14 +49,14 @@ export const authenticateToken = async (
     const result = await application.authenticateSession.execute(token);
     if (result.ok === false) {
       if (result.reason === 'USER_NOT_FOUND') {
-        res.status(401).json({ error: 'Përdoruesi nuk u gjet ose është fshirë' });
+        res.status(401).json({ error: 'The user was not found or has been deleted.' });
         return;
       }
       if (result.reason === 'SESSION_EXPIRED') {
-        res.status(401).json({ error: 'Sesioni ka skaduar. Ju lutem kyçuni përsëri.' });
+        res.status(401).json({ error: 'Your session has expired. Please sign in again.' });
         return;
       }
-      res.status(403).json({ error: 'Token i pavlefshëm ose i skaduar' });
+      res.status(403).json({ error: 'Invalid or expired token.' });
       return;
     }
 
@@ -49,13 +64,13 @@ export const authenticateToken = async (
 
     next();
   } catch {
-    res.status(403).json({ error: 'Token i pavlefshëm ose i skaduar' });
+    res.status(403).json({ error: 'Invalid or expired token.' });
     return;
   }
 };
 
 /**
- * Middleware që kufizon qasjen vetëm për rolin ADMIN
+ * Restrict access to administrators.
  */
 export const requireAdmin = (
   req: AuthRequest,
@@ -63,7 +78,7 @@ export const requireAdmin = (
   next: NextFunction
 ): void => {
   if (!req.user || req.user.role !== 'ADMIN') {
-    res.status(403).json({ error: 'Nuk keni leje administrative për këtë veprim' });
+    res.status(403).json({ error: 'You do not have administrative permission for this action.' });
     return;
   }
   next();

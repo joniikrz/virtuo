@@ -66,7 +66,7 @@ app.use('/api', (req, res, next) => {
   const forwardedHost = typeof req.headers['x-forwarded-host'] === 'string' ? req.headers['x-forwarded-host'].split(',')[0] : req.headers.host;
   const sameOrigin = Boolean(origin && forwardedHost && origin === `${forwardedProto}://${forwardedHost}`);
   if (fetchSite === 'cross-site' || (origin && !sameOrigin && !allowedOrigins.has(origin))) {
-    return res.status(403).json({ error: 'Kërkesa ndër-faqe u bllokua' });
+    return res.status(403).json({ error: 'Cross-origin request blocked' });
   }
   return next();
 });
@@ -87,7 +87,7 @@ app.use('/api/auth/register', rateLimit({ scope: 'register', windowMs: 60 * 60 *
 app.use('/api/auth/setup', rateLimit({ scope: 'setup', windowMs: 60 * 60 * 1000, max: 3 }));
 app.use('/api', rateLimit({ scope: 'api', windowMs: 60 * 1000, max: 600 }));
 
-// Montimi i rrugëve (Routes)
+// Mount routes.
 app.use('/api/auth', authRouter);
 app.use('/api/spaces', spacesRouter);
 app.use('/api/spaces/:spaceId/tasks', tasksRouter);
@@ -95,7 +95,7 @@ app.use('/api/tasks', tasksRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api', tagsRouter);
 
-// Një rrugë bazë për të kontrolluar statusin e serverit
+// Basic server health endpoint.
 app.get('/health/live', (_req, res) => {
   res.json({ status: 'alive', timestamp: new Date().toISOString() });
 });
@@ -112,24 +112,24 @@ app.get('/health/ready', async (_req, res) => {
 
 app.get('/health', (_req, res) => res.redirect(307, '/health/ready'));
 
-app.use('/api', (_req, res) => res.status(404).json({ error: 'Endpoint-i nuk u gjet' }));
+app.use('/api', (_req, res) => res.status(404).json({ error: 'Endpoint not found' }));
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err.name === 'MulterError') {
-    return res.status(400).json({ error: 'Skedari nuk u pranua. Kontrollo madhësinë dhe provo përsëri.' });
+    return res.status(400).json({ error: 'The file was rejected. Check its size and try again.' });
   }
   if (err.name === 'UploadValidationError') {
     return res.status(400).json({ error: err.message });
   }
   if (err instanceof SyntaxError && 'body' in err) {
-    return res.status(400).json({ error: 'JSON-i i kërkesës nuk është i vlefshëm' });
+    return res.status(400).json({ error: 'The request JSON is invalid' });
   }
   const requestId = res.getHeader('X-Request-Id');
   console.error(`Unhandled error [${requestId || 'pa-id'}]:`, process.env.NODE_ENV === 'production' ? err.message : err);
-  return res.status(500).json({ error: 'Ndodhi një gabim i papritur në server' });
+  return res.status(500).json({ error: 'An unexpected server error occurred' });
 });
 
-// Eksporto app për teste
+// Export the app for tests.
 export { app };
 
 // Nisja e serverit
@@ -139,13 +139,13 @@ if (process.env.NODE_ENV !== 'test') {
       await prisma.$connect();
       if (process.env.NODE_ENV !== 'production') await seedDatabase();
     } catch (error) {
-      console.error('[Startup] Lidhja me databazën dështoi:', error);
+      console.error('[Startup] Database connection failed:', error);
       process.exit(1);
     }
 
     const server = app.listen(PORT, '0.0.0.0', () => {
-      console.log(`Serveri po punon në portën http://0.0.0.0:${PORT}`);
-      // Verifikimi raporton konfigurimin në log, por nuk e bllokon nisjen e aplikacionit.
+      console.log(`Server running at http://0.0.0.0:${PORT}`);
+      // Verification reports configuration in the log without blocking startup.
       void verifyEmailTransport();
     });
     server.requestTimeout = requestTimeoutMs;

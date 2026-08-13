@@ -16,7 +16,7 @@ router.get('/tags', authenticateToken, async (req: AuthRequest, res: Response): 
     res.json(tags);
   } catch (error) {
     console.error('Fetch tags error:', error);
-    res.status(500).json({ error: 'Ndodhi një gabim gjatë marrjes së tags' });
+    res.status(500).json({ error: 'An error occurred while retrieving tags' });
   }
 });
 
@@ -29,18 +29,18 @@ router.post('/tags', authenticateToken, requireAdmin, async (req: AuthRequest, r
   const color = typeof req.body.color === 'string' ? req.body.color.trim() : '#6366f1';
 
   if (!name || name.length > 50) {
-    res.status(400).json({ error: 'Emri i tag-ut duhet të ketë 1 deri në 50 karaktere' });
+    res.status(400).json({ error: 'The tag name must contain between 1 and 50 characters' });
     return;
   }
   if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
-    res.status(400).json({ error: 'Ngjyra e tag-ut nuk është e vlefshme' });
+    res.status(400).json({ error: 'The tag colour is invalid' });
     return;
   }
 
   try {
     const existing = await prisma.tag.findUnique({ where: { name } });
     if (existing) {
-      res.status(400).json({ error: 'Ky tag ekziston tashmë' });
+      res.status(400).json({ error: 'This tag already exists' });
       return;
     }
 
@@ -51,7 +51,7 @@ router.post('/tags', authenticateToken, requireAdmin, async (req: AuthRequest, r
     res.status(201).json(tag);
   } catch (error) {
     console.error('Create tag error:', error);
-    res.status(500).json({ error: 'Ndodhi një gabim gjatë krijimit të tag' });
+    res.status(500).json({ error: 'An error occurred while creating the tag' });
   }
 });
 
@@ -64,20 +64,20 @@ router.post('/tasks/:taskId/tags', authenticateToken, requireAdmin, async (req: 
   const { tagId } = req.body;
 
   if (!tagId) {
-    res.status(400).json({ error: 'ID e tag është e detyrueshme' });
+    res.status(400).json({ error: 'A tag ID is required' });
     return;
   }
 
   try {
     const task = await prisma.task.findUnique({ where: { id: taskId } });
     if (!task) {
-      res.status(404).json({ error: 'Detyra nuk u gjet' });
+      res.status(404).json({ error: 'Task not found' });
       return;
     }
 
     const tag = await prisma.tag.findUnique({ where: { id: tagId } });
     if (!tag) {
-      res.status(404).json({ error: 'Tag nuk u gjet' });
+      res.status(404).json({ error: 'Tag not found' });
       return;
     }
 
@@ -88,7 +88,7 @@ router.post('/tasks/:taskId/tags', authenticateToken, requireAdmin, async (req: 
     res.status(201).json(taskTag);
   } catch (error) {
     console.error('Add tag to task error:', error);
-    res.status(500).json({ error: 'Ndodhi një gabim' });
+    res.status(500).json({ error: 'An error occurred' });
   }
 });
 
@@ -106,10 +106,10 @@ router.delete('/tasks/:taskId/tags/:tagId', authenticateToken, requireAdmin, asy
       },
     });
 
-    res.json({ message: 'Tag u hoq me sukses' });
+    res.json({ message: 'Tag removed successfully' });
   } catch (error) {
     console.error('Remove tag from task error:', error);
-    res.status(500).json({ error: 'Ndodhi një gabim' });
+    res.status(500).json({ error: 'An error occurred' });
   }
 });
 

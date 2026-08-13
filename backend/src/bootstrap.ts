@@ -14,12 +14,12 @@ async function bootstrap() {
         )
     `;
     if (removedOrphanNotifications > 0) {
-      console.log(`[Bootstrap] U hoqën ${removedOrphanNotifications} njoftime pa detyrë`);
+      console.log(`[Bootstrap] Removed ${removedOrphanNotifications} orphan task notifications`);
     }
     await seedDatabase();
     console.log('[Bootstrap] Databaza u inicializua me sukses');
   } catch (error) {
-    console.error('[Bootstrap] Inicializimi dështoi:', error);
+    console.error('[Bootstrap] Initialization failed:', error);
     process.exitCode = 1;
   } finally {
     await prisma.$disconnect();

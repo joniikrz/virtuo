@@ -26,7 +26,7 @@ export default function StatsPanel({ tasks, membersCount }: StatsPanelProps) {
           <Activity size={24} />
         </div>
         <div>
-          <div style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Progresi</div>
+          <div style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Progress</div>
           <div style={{ fontSize: '1.25rem', fontWeight: 600 }}>{completionRate}%</div>
         </div>
       </div>
@@ -36,7 +36,7 @@ export default function StatsPanel({ tasks, membersCount }: StatsPanelProps) {
           <CheckCircle2 size={24} />
         </div>
         <div>
-          <div style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Të Përfunduara</div>
+          <div style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Completed</div>
           <div style={{ fontSize: '1.25rem', fontWeight: 600 }}>{completedTasks}</div>
         </div>
       </div>
@@ -46,7 +46,7 @@ export default function StatsPanel({ tasks, membersCount }: StatsPanelProps) {
           <Clock size={24} />
         </div>
         <div>
-          <div style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Në Pritje</div>
+          <div style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Pending</div>
           <div style={{ fontSize: '1.25rem', fontWeight: 600 }}>{pendingTasks}</div>
         </div>
       </div>
@@ -56,7 +56,7 @@ export default function StatsPanel({ tasks, membersCount }: StatsPanelProps) {
           <Users size={24} />
         </div>
         <div>
-          <div style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Anëtarë</div>
+          <div style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Members</div>
           <div style={{ fontSize: '1.25rem', fontWeight: 600 }}>{membersCount}</div>
         </div>
       </div>

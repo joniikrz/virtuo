@@ -39,7 +39,7 @@ export default function CreateTaskModal({ activeSpace, spaceMembers, onClose, on
     <div className="modal-overlay">
       <div className="modal-content">
         <div className="modal-header">
-          <h3>Krijo detyrë të re</h3>
+          <h3>Create a new task</h3>
           <button type="button" className="modal-close-btn" onClick={onClose} disabled={isSubmitting}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
@@ -47,31 +47,31 @@ export default function CreateTaskModal({ activeSpace, spaceMembers, onClose, on
             {errorMsg && <div style={{ color: 'hsl(var(--accent-danger))', marginBottom: '15px' }}>{errorMsg}</div>}
             
             <div className="form-group">
-              <label>Titulli i detyrës</label>
+              <label>Task title</label>
               <input 
                 type="text" 
                 className="input-field" 
                 value={taskTitle} 
                 onChange={e => setTaskTitle(e.target.value)} 
-                placeholder="p.sh. Përgatit raportin mujor" 
+                placeholder="e.g. Prepare the monthly report"
                 required 
               />
             </div>
             
             <div className="form-group">
-              <label>Përshkrimi</label>
+              <label>Description</label>
               <textarea 
                 className="input-field" 
                 style={{ minHeight: '80px', resize: 'vertical' }}
                 value={taskDesc} 
                 onChange={e => setTaskDesc(e.target.value)} 
-                placeholder="Çfarë duhet të bëhet..."
+                placeholder="What needs to be done..."
               />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div className="form-group">
-                <label>Afati i fundit</label>
+                <label>Deadline</label>
                 <input 
                   type="datetime-local" 
                   className="input-field" 
@@ -82,16 +82,16 @@ export default function CreateTaskModal({ activeSpace, spaceMembers, onClose, on
               </div>
 
               <div className="form-group">
-                <label>Prioriteti</label>
+                <label>Priority</label>
                 <select 
                   className="input-field"
                   value={taskPriority}
                   onChange={e => setTaskPriority(e.target.value)}
                 >
-                  <option value="LOW">I ulët</option>
+                  <option value="LOW">Low</option>
                   <option value="NORMAL">Normal</option>
-                  <option value="HIGH">I lartë</option>
-                  <option value="URGENT">Urgjent</option>
+                  <option value="HIGH">High</option>
+                  <option value="URGENT">Urgent</option>
                 </select>
               </div>
             </div>
@@ -100,9 +100,9 @@ export default function CreateTaskModal({ activeSpace, spaceMembers, onClose, on
 
           </div>
           <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSubmitting}>Anulo</button>
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSubmitting}>Cancel</button>
             <button type="submit" className="btn btn-primary" disabled={taskAssigneeIds.length === 0 || isSubmitting}>
-              {isSubmitting ? 'Duke u krijuar...' : 'Krijo detyrën'}
+              {isSubmitting ? 'Creating...' : 'Create task'}
             </button>
           </div>
         </form>

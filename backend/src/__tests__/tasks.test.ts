@@ -326,7 +326,7 @@ describe('Tasks API Tests', () => {
       .set('Cookie', [`token=${mockToken}`]);
 
     expect(res.status).toBe(200);
-    expect(res.body.message).toContain('u fshi me sukses');
+    expect(res.body.message).toContain('deleted successfully');
     expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { taskId: 'task-1' } });
     expect(prisma.notification.deleteMany).toHaveBeenCalledBefore(vi.mocked(prisma.task.delete));
   });

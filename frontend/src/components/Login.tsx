@@ -33,7 +33,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   };
 
   const submitAuth = async () => {
-    if (mode === 'register' && password !== confirmPassword) throw new Error('Fjalëkalimet nuk përputhen.');
+    if (mode === 'register' && password !== confirmPassword) throw new Error('Passwords do not match.');
     const isRegister = mode === 'register';
     const response = await fetch(isRegister ? '/api/auth/register' : '/api/auth/login', {
       method: 'POST',
@@ -44,8 +44,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         : { email: email.trim(), password }),
     });
     const data = await readApiJson<{ user?: User }>(response);
-    if (!response.ok) throw new Error(apiErrorMessage(response, data, 'Nuk u krye kërkesa. Provo përsëri.'));
-    if (!data.user) throw new Error('Përgjigje e pavlefshme nga serveri. Provo përsëri.');
+    if (!response.ok) throw new Error(apiErrorMessage(response, data, 'The request failed. Please try again.'));
+    if (!data.user) throw new Error('Invalid server response. Please try again.');
     onLoginSuccess(data.user);
   };
 
@@ -56,27 +56,27 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         body: JSON.stringify({ email: email.trim(), recoveryCode }),
       });
       const data = await readApiJson<{ resetToken?: string }>(response);
-      if (!response.ok) throw new Error(apiErrorMessage(response, data, 'Verifikimi dështoi.'));
-      if (!data.resetToken) throw new Error('Përgjigje e pavlefshme nga serveri.');
+      if (!response.ok) throw new Error(apiErrorMessage(response, data, 'Verification failed.'));
+      if (!data.resetToken) throw new Error('Invalid server response.');
       setResetToken(data.resetToken);
       setRecoveryCode('');
       setMode('reset');
-      setSuccess('Kodi u verifikua. Vendos fjalëkalimin e ri.');
+      setSuccess('Code verified. Enter your new password.');
       return;
     }
 
-    if (password !== confirmPassword) throw new Error('Fjalëkalimet nuk përputhen.');
+    if (password !== confirmPassword) throw new Error('Passwords do not match.');
     const response = await fetch('/api/auth/reset-password', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ resetToken, newPassword: password }),
     });
     const data = await readApiJson<{ message?: string }>(response);
-    if (!response.ok) throw new Error(apiErrorMessage(response, data, 'Rivendosja dështoi.'));
+    if (!response.ok) throw new Error(apiErrorMessage(response, data, 'Password reset failed.'));
     setMode('login');
     setResetToken('');
     setPassword('');
     setConfirmPassword('');
-    setSuccess(data.message || 'Fjalëkalimi u rivendos. Tani mund të kyçeni.');
+    setSuccess(data.message || 'Password reset. You can now sign in.');
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -88,7 +88,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       if (mode === 'forgot' || mode === 'reset') await submitRecovery();
       else await submitAuth();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Nuk u lidhëm me serverin. Provo përsëri.');
+      setError(err instanceof Error ? err.message : 'Could not connect to the server. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -97,9 +97,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const isRegister = mode === 'register';
   const isRecovery = mode === 'forgot' || mode === 'reset';
   const intro = isRegister
-    ? 'Krijo një hapësirë të sigurt për ekipin tënd.'
-    : isRecovery ? 'Rikthe qasjen në llogarinë tënde në mënyrë të sigurt.'
-      : 'Mirë se erdhe përsëri në hapësirën tënde të punës.';
+    ? 'Create a secure workspace for your team.'
+    : isRecovery ? 'Securely recover access to your account.'
+      : 'Welcome back to your workspace.';
 
   return (
     <main className="auth-wrapper">
@@ -111,12 +111,12 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         </div>
 
         {!isRecovery ? (
-          <div className="auth-tabs" role="tablist" aria-label="Autentikimi">
-            <button type="button" role="tab" aria-selected={!isRegister} className={`auth-tab ${!isRegister ? 'active' : ''}`} onClick={() => switchMode('login')}>Kyçu</button>
-            <button type="button" role="tab" aria-selected={isRegister} className={`auth-tab ${isRegister ? 'active' : ''}`} onClick={() => switchMode('register')}>Regjistrohu</button>
+          <div className="auth-tabs" role="tablist" aria-label="Authentication">
+            <button type="button" role="tab" aria-selected={!isRegister} className={`auth-tab ${!isRegister ? 'active' : ''}`} onClick={() => switchMode('login')}>Sign in</button>
+            <button type="button" role="tab" aria-selected={isRegister} className={`auth-tab ${isRegister ? 'active' : ''}`} onClick={() => switchMode('register')}>Sign up</button>
           </div>
         ) : (
-          <button type="button" className="auth-back" onClick={() => switchMode('login')}><ArrowLeft size={16} /> Kthehu te kyçja</button>
+          <button type="button" className="auth-back" onClick={() => switchMode('login')}><ArrowLeft size={16} /> Back to sign in</button>
         )}
 
         {error && <div className="alert alert-error" role="alert"><ShieldAlert size={17} /><span>{error}</span></div>}
@@ -125,43 +125,43 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         <form onSubmit={handleSubmit} className="auth-form">
           {isRegister && (
             <div className="form-row">
-              <div className="form-group"><label htmlFor="firstName">Emri</label><input id="firstName" className="input-field" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Filan" autoComplete="given-name" maxLength={60} required /></div>
-              <div className="form-group"><label htmlFor="lastName">Mbiemri</label><input id="lastName" className="input-field" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Fisteku" autoComplete="family-name" maxLength={60} required /></div>
+              <div className="form-group"><label htmlFor="firstName">First name</label><input id="firstName" className="input-field" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="John" autoComplete="given-name" maxLength={60} required /></div>
+              <div className="form-group"><label htmlFor="lastName">Last name</label><input id="lastName" className="input-field" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Smith" autoComplete="family-name" maxLength={60} required /></div>
             </div>
           )}
 
           {mode !== 'reset' && (
-            <div className="form-group"><label htmlFor="email">Email</label><input type="email" id="email" className="input-field" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="emri@kompania.com" autoComplete="email" maxLength={254} required /></div>
+            <div className="form-group"><label htmlFor="email">Email</label><input type="email" id="email" className="input-field" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@company.com" autoComplete="email" maxLength={254} required /></div>
           )}
 
           {(mode === 'login' || mode === 'register' || mode === 'reset') && (
             <div className="form-group">
-              <div className="form-label-row"><label htmlFor="password">{mode === 'reset' ? 'Fjalëkalimi i ri' : 'Fjalëkalimi'}</label>{(isRegister || mode === 'reset') && <span>12–128 karaktere</span>}</div>
+              <div className="form-label-row"><label htmlFor="password">{mode === 'reset' ? 'New password' : 'Password'}</label>{(isRegister || mode === 'reset') && <span>12–128 characters</span>}</div>
               <div className="password-field">
-                <input type={showPassword ? 'text' : 'password'} id="password" className="input-field" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Vendos fjalëkalimin" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={mode === 'login' ? undefined : 12} maxLength={128} required />
-                <button type="button" className="password-toggle" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? 'Fshih fjalëkalimin' : 'Shfaq fjalëkalimin'}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+                <input type={showPassword ? 'text' : 'password'} id="password" className="input-field" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={mode === 'login' ? undefined : 12} maxLength={128} required />
+                <button type="button" className="password-toggle" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
               </div>
             </div>
           )}
 
-          {(isRegister || mode === 'reset') && <div className="form-group"><label htmlFor="confirmPassword">Përsërit fjalëkalimin</label><input type={showPassword ? 'text' : 'password'} id="confirmPassword" className="input-field" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Përsërit fjalëkalimin" autoComplete="new-password" minLength={12} maxLength={128} required /></div>}
+          {(isRegister || mode === 'reset') && <div className="form-group"><label htmlFor="confirmPassword">Confirm password</label><input type={showPassword ? 'text' : 'password'} id="confirmPassword" className="input-field" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm password" autoComplete="new-password" minLength={12} maxLength={128} required /></div>}
 
           {(isRegister || mode === 'forgot') && (
             <div className="form-group">
-              <div className="form-label-row"><label htmlFor="recoveryCode">Kodi i rikuperimit</label><span>10–64 karaktere</span></div>
-              <input type="password" id="recoveryCode" className="input-field" value={recoveryCode} onChange={(e) => setRecoveryCode(e.target.value)} placeholder={isRegister ? 'Zgjidh një kod që e mban mend' : 'Shkruaj kodin e vendosur në regjistrim'} minLength={10} maxLength={64} autoComplete="off" required />
-              {isRegister && <small className="field-help">Ruaje privatisht: ky kod të lejon të krijosh fjalëkalim të ri nëse e harron.</small>}
+              <div className="form-label-row"><label htmlFor="recoveryCode">Recovery code</label><span>10–64 characters</span></div>
+              <input type="password" id="recoveryCode" className="input-field" value={recoveryCode} onChange={(e) => setRecoveryCode(e.target.value)} placeholder={isRegister ? 'Choose a memorable private code' : 'Enter the code set during registration'} minLength={10} maxLength={64} autoComplete="off" required />
+              {isRegister && <small className="field-help">Keep it private: this code lets you create a new password if you forget it.</small>}
             </div>
           )}
 
-          {mode === 'login' && <button type="button" className="forgot-password-link" onClick={() => switchMode('forgot')}>Harrove fjalëkalimin?</button>}
+          {mode === 'login' && <button type="button" className="forgot-password-link" onClick={() => switchMode('forgot')}>Forgot password?</button>}
 
           <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
-            {loading ? 'Duke u procesuar...' : isRegister ? <><UserPlus size={18} /><span>Krijo llogarinë</span></> : isRecovery ? <><KeyRound size={18} /><span>{mode === 'forgot' ? 'Verifiko kodin' : 'Ruaj fjalëkalimin e ri'}</span></> : <><LogIn size={18} /><span>Kyçu në Virtuo</span></>}
+            {loading ? 'Processing...' : isRegister ? <><UserPlus size={18} /><span>Create account</span></> : isRecovery ? <><KeyRound size={18} /><span>{mode === 'forgot' ? 'Verify code' : 'Save new password'}</span></> : <><LogIn size={18} /><span>Sign in to Virtuo</span></>}
           </button>
         </form>
 
-        {!isRecovery && <p className="auth-hint">{isRegister ? 'Duke u regjistruar, pranon të përdorësh Virtuo vetëm për punën e ekipit tënd.' : 'Nuk ke llogari? Zgjidh “Regjistrohu” për të filluar.'}</p>}
+        {!isRecovery && <p className="auth-hint">{isRegister ? 'By signing up, you agree to use Virtuo only for your team’s work.' : 'No account yet? Choose “Sign up” to get started.'}</p>}
       </section>
     </main>
   );

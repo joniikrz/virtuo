@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LogOut, User as UserIcon, Bell, Settings } from 'lucide-react';
+import { LogOut, User as UserIcon, Bell, ListChecks, Settings } from 'lucide-react';
 import { User, Notification } from '../types';
 import NotificationsPanel from './NotificationsPanel';
 import ThemeToggle from './ThemeToggle';
@@ -14,9 +14,11 @@ interface NavbarProps {
   onMarkAllAsRead: () => void;
   onOpenTask: (taskId: string, notificationId: string) => void;
   onRespondToSpaceInvite: (inviteId: string, action: 'accept' | 'reject', notificationId: string) => Promise<string>;
+  isMyTasks: boolean;
+  onShowMyTasks: () => void;
 }
 
-export default function Navbar({ user, onLogout, onUserUpdate, notifications, onMarkAsRead, onMarkAllAsRead, onOpenTask, onRespondToSpaceInvite }: NavbarProps) {
+export default function Navbar({ user, onLogout, onUserUpdate, notifications, onMarkAsRead, onMarkAllAsRead, onOpenTask, onRespondToSpaceInvite, isMyTasks, onShowMyTasks }: NavbarProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   
@@ -33,12 +35,18 @@ export default function Navbar({ user, onLogout, onUserUpdate, notifications, on
           
           <ThemeToggle />
 
+          {user.role !== 'ADMIN' && (
+            <button type="button" className={`nav-my-tasks ${isMyTasks ? 'active' : ''}`} onClick={onShowMyTasks} aria-pressed={isMyTasks} title="View tasks assigned to you across every workspace">
+              <ListChecks size={17} /><span>My Tasks</span>
+            </button>
+          )}
+
           <button
             type="button"
             className="btn btn-secondary btn-sm nav-icon-button"
             onClick={() => { setShowNotifications(false); setShowSettings(true); }}
-            aria-label="Hap cilësimet"
-            title="Cilësimet"
+            aria-label="Open settings"
+            title="Settings"
           >
             <Settings size={18} />
           </button>
@@ -48,7 +56,7 @@ export default function Navbar({ user, onLogout, onUserUpdate, notifications, on
               className="btn btn-secondary btn-sm" 
               style={{ padding: '6px', borderRadius: '50%', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               onClick={() => setShowNotifications(!showNotifications)}
-              aria-label={unreadCount > 0 ? `Njoftimet, ${unreadCount} të palexuara` : 'Njoftimet'}
+              aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
               aria-expanded={showNotifications}
             >
               <Bell size={18} />
@@ -78,7 +86,7 @@ export default function Navbar({ user, onLogout, onUserUpdate, notifications, on
             type="button"
             className="user-badge" 
             onClick={() => { setShowNotifications(false); setShowSettings(true); }}
-            aria-label="Hap profilin"
+            aria-label="Open profile"
             style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', backgroundColor: 'hsl(var(--bg-primary))', borderRadius: '20px', border: '1px solid hsl(var(--border))' }}
           >
             <UserIcon size={14} />
@@ -88,9 +96,9 @@ export default function Navbar({ user, onLogout, onUserUpdate, notifications, on
             </span>
           </button>
 
-          <button onClick={onLogout} className="btn btn-secondary btn-sm nav-logout" title="Dil" aria-label="Dil nga llogaria" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <button onClick={onLogout} className="btn btn-secondary btn-sm nav-logout" title="Log out" aria-label="Log out of your account" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <LogOut size={16} />
-            <span>Dil</span>
+            <span>Log out</span>
           </button>
         </div>
       </nav>

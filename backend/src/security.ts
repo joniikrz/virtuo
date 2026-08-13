@@ -12,7 +12,7 @@ const production = process.env.NODE_ENV === 'production';
 const configuredSecret = process.env.JWT_SECRET;
 
 if (production && (!configuredSecret || configuredSecret.length < 32)) {
-  throw new Error('JWT_SECRET duhet të ketë së paku 32 karaktere në production');
+  throw new Error('JWT_SECRET must contain at least 32 characters in production');
 }
 
 export const JWT_SECRET = configuredSecret || 'virtuo-dev-secret-do-not-use-in-production';
@@ -23,10 +23,10 @@ const commonPasswords = new Set([
 ]);
 
 export function passwordError(value: unknown): string | null {
-  if (typeof value !== 'string') return 'Fjalëkalimi nuk është i vlefshëm';
-  if (value.length < PASSWORD_MIN_LENGTH) return `Fjalëkalimi duhet të ketë së paku ${PASSWORD_MIN_LENGTH} karaktere`;
-  if (value.length > PASSWORD_MAX_LENGTH) return `Fjalëkalimi mund të ketë maksimumi ${PASSWORD_MAX_LENGTH} karaktere`;
-  if (commonPasswords.has(value.toLowerCase())) return 'Zgjidhni një fjalëkalim më të fortë dhe më pak të zakonshëm';
+  if (typeof value !== 'string') return 'The password is invalid';
+  if (value.length < PASSWORD_MIN_LENGTH) return `The password must contain at least ${PASSWORD_MIN_LENGTH} characters`;
+  if (value.length > PASSWORD_MAX_LENGTH) return `The password can contain at most ${PASSWORD_MAX_LENGTH} characters`;
+  if (commonPasswords.has(value.toLowerCase())) return 'Choose a stronger, less common password';
   return null;
 }
 

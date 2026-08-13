@@ -27,7 +27,8 @@ export default function ThemeToggle() {
       onClick={toggleTheme} 
       className="btn btn-secondary btn-sm" 
       style={{ padding: '6px', borderRadius: '50%' }}
-      title={theme === 'light' ? 'Kalo në modalitetin e errët' : 'Kalo në modalitetin e çelur'}
+      title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+      aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
     >
       {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
     </button>

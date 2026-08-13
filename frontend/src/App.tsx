@@ -42,8 +42,10 @@ export default function App() {
   const notificationsEtagRef = useRef('');
   const taskNavigationSequenceRef = useRef(0);
   const [taskNavigationRequest, setTaskNavigationRequest] = useState<TaskNavigationRequest | null>(null);
+  const [myTasksRequestId, setMyTasksRequestId] = useState(0);
+  const [isMyTasksView, setIsMyTasksView] = useState(true);
 
-  // 1. Verifikimi i sesionit ekzistues (Auto-Login)
+  // 1. Restore an existing session (auto-login).
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -55,7 +57,7 @@ export default function App() {
           setUser(null);
         }
       } catch (error) {
-        console.error('Verifikimi i sesionit dështoi:', error);
+        console.error('Session verification failed:', error);
         setUser(null);
       } finally {
         setLoading(false);
@@ -76,7 +78,7 @@ export default function App() {
     return () => window.removeEventListener('virtuo:unauthorized', handleUnauthorized);
   }, []);
 
-  // 2. Marrja e njoftimeve kur përdoruesi është i kyçur
+  // 2. Fetch notifications for the signed-in user.
   const fetchNotifications = useCallback(async () => {
     if (!user) return;
     try {
@@ -91,7 +93,7 @@ export default function App() {
         setNotifications(data.notifications || []);
       }
     } catch (err) {
-      console.error('Gabim gjatë leximit të njoftimeve:', err);
+      console.error('Unable to fetch notifications:', err);
     }
   }, [user]);
 
@@ -118,7 +120,7 @@ export default function App() {
     };
   }, [user, fetchNotifications]);
 
-  // 3. Dalja nga sistemi (Logout)
+  // 3. Sign out.
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/logout', { 
@@ -126,7 +128,7 @@ export default function App() {
         credentials: 'include' 
       });
     } catch (error) {
-      console.error('Gabim gjatë daljes nga sistemi:', error);
+      console.error('Sign out failed:', error);
     } finally {
       setUser(null);
       setNotifications([]);
@@ -134,9 +136,9 @@ export default function App() {
     }
   };
 
-  // 4. Shënimi i një njoftimi si të lexuar
+  // 4. Mark one notification as read.
   const handleMarkAsRead = async (id: string) => {
-    // Përditëso UI-në menjëherë (Optimistic UI Update)
+    // Update the interface immediately (optimistic update).
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
     );
@@ -147,11 +149,11 @@ export default function App() {
         credentials: 'include',
       });
     } catch (error) {
-      console.error('Dështoi ruajtja e statusit të njoftimit:', error);
+      console.error('Unable to save the notification status:', error);
     }
   };
 
-  // 5. Shënimi i të gjitha njoftimeve si të lexuara
+  // 5. Mark all notifications as read.
   const handleMarkAllAsRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
 
@@ -161,7 +163,7 @@ export default function App() {
         credentials: 'include',
       });
     } catch (error) {
-      console.error('Dështoi ruajtja e statusit të njoftimeve:', error);
+      console.error('Unable to save notification statuses:', error);
     }
   };
 
@@ -183,7 +185,7 @@ export default function App() {
       requestId: taskNavigationSequenceRef.current,
     });
 
-    // Konsumo deep-link-un që refresh-i të mos e hapë detyrën përsëri pa kërkesë.
+    // Consume the deep link so a refresh does not reopen the task unexpectedly.
     currentUrl.searchParams.delete('task');
     window.history.replaceState({}, '', `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`);
   }, [user]);
@@ -194,11 +196,11 @@ export default function App() {
       credentials: 'include',
     });
     const data = await readApiJson<{ message?: string }>(response);
-    if (!response.ok) throw new Error(data.message || (data as { error?: string }).error || 'Ftesa nuk mund të përpunohej.');
+    if (!response.ok) throw new Error(data.message || (data as { error?: string }).error || 'The invitation could not be processed.');
     setNotifications((current) => current.filter((notification) => notification.id !== notificationId));
     notificationsEtagRef.current = '';
     window.dispatchEvent(new Event('virtuo:data-change'));
-    return data.message || (action === 'accept' ? 'Ftesa u pranua.' : 'Ftesa u refuzua.');
+    return data.message || (action === 'accept' ? 'Invitation accepted.' : 'Invitation declined.');
   };
 
   const handleUnavailableNotification = useCallback(async (notificationId: string) => {
@@ -211,18 +213,18 @@ export default function App() {
         credentials: 'include',
       });
     } catch (error) {
-      console.error('Njoftimi i vjetër nuk mund të pastrohej:', error);
+      console.error('The outdated notification could not be removed:', error);
     }
   }, []);
 
-  // Ekrani gjatë ngarkimit (Loading Screen)
+  // Loading screen.
   if (loading) {
     return (
-      <div className="app-loading" role="status" aria-live="polite" aria-label="Duke u ngarkuar Virtuo">
+      <div className="app-loading" role="status" aria-live="polite" aria-label="Loading Virtuo">
         <div className="app-loading__content">
           <img className="app-loading__logo" src="/assets/virtuo-logo.png" alt="Virtuo" />
           <span className="app-loading__spinner" aria-hidden="true" />
-          <p>Duke përgatitur hapësirën tënde...</p>
+          <p>Preparing your workspace...</p>
         </div>
       </div>
     );
@@ -241,6 +243,8 @@ export default function App() {
             onMarkAllAsRead={handleMarkAllAsRead}
             onOpenTask={handleOpenTask}
             onRespondToSpaceInvite={handleSpaceInviteResponse}
+            isMyTasks={isMyTasksView}
+            onShowMyTasks={() => setMyTasksRequestId((current) => current + 1)}
           />
           {user.role === 'ADMIN' ? (
             <AdminPanel currentUser={user} />
@@ -250,6 +254,8 @@ export default function App() {
               taskNavigationRequest={taskNavigationRequest}
               onTaskNavigationHandled={() => setTaskNavigationRequest(null)}
               onTaskNavigationUnavailable={handleUnavailableNotification}
+              myTasksRequestId={myTasksRequestId}
+              onMyTasksViewChange={setIsMyTasksView}
             />
           )}
         </>

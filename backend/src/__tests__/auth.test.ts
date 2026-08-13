@@ -38,6 +38,14 @@ describe('Auth Endpoints API Tests', () => {
     vi.clearAllMocks();
   });
 
+  it('GET /api/auth/me - returns an anonymous session without a console-triggering 401', async () => {
+    const res = await request(app).get('/api/auth/me');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ user: null });
+    expect(res.headers['cache-control']).toBe('no-store');
+  });
+
   it('POST /api/auth/register - Registron me sukses përdoruesin e ri', async () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.role.findUnique).mockResolvedValue({
@@ -78,7 +86,7 @@ describe('Auth Endpoints API Tests', () => {
       });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain('Të gjitha fushat');
+    expect(res.body.error).toContain('All fields');
   });
 
   it('GET /api/auth/users - Lejon përdoruesin e autentikuar të marrë listën e përdoruesve', async () => {
@@ -122,7 +130,7 @@ describe('Auth Endpoints API Tests', () => {
       .send({ currentPassword: 'Current123!', newPassword: 'NewPassword456!' });
 
     expect(res.status).toBe(200);
-    expect(res.body.message).toContain('sukses');
+    expect(res.body.message).toContain('successfully');
     expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'u1' } }));
   });
 
@@ -146,7 +154,7 @@ describe('Auth Endpoints API Tests', () => {
       .send({ currentPassword: 'WrongPassword!', newPassword: 'NewPassword456!' });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain('aktual');
+    expect(res.body.error).toContain('current');
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
@@ -172,7 +180,7 @@ describe('Auth Endpoints API Tests', () => {
       where: { id: 'user-2' },
       data: { passwordHash: expect.any(String), sessionVersion: { increment: 1 } },
     });
-    expect(res.body.message).toContain('Sesionet e vjetra u çaktivizuan');
+    expect(res.body.message).toContain('Older sessions were revoked');
   });
 
   it('PUT /api/auth/users/:id/password - Përdoruesi i zakonshëm nuk ka qasje', async () => {

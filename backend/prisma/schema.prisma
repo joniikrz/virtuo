@@ -52,7 +52,7 @@ model User {
 model Space {
   id          String        @id @default(uuid())
   name        String
-  // Fushë legacy për DB-të ekzistuese. Nuk përdoret nga API ose UI.
+  // Legacy field retained for existing databases; the API and UI do not use it.
   description String?
   color       String        @default("#0079BF")
   isPrivate   Boolean       @default(true) @map("is_private")
@@ -118,7 +118,7 @@ model Task {
   createdAt    DateTime         @default(now()) @map("created_at")
   updatedAt    DateTime         @updatedAt @map("updated_at")
   attachments  Attachment[]
-  // Fushë legacy për DB-të ekzistuese. Dukshmëria kontrollohet vetëm me assignedToId.
+  // Legacy field retained for existing databases; assignments control visibility.
   visibleToAll Boolean          @default(true) @map("visible_to_all")
   priority     String           @default("NORMAL") @map("priority")
   visibility   TaskVisibility[]
@@ -162,7 +162,7 @@ model TaskAssignee {
   @@map("task_assignees")
 }
 
-// Tabelë legacy; task-et e reja nuk krijojnë rreshta këtu.
+// Legacy table; new tasks do not create rows here.
 model TaskVisibility {
   id     String @id @default(uuid())
   taskId String @map("task_id")

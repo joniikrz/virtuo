@@ -87,7 +87,7 @@ describe('Space invitations', () => {
       .send({ email: 'missing@virtuo.local' });
 
     expect(response.status).toBe(404);
-    expect(response.body.error).toContain('Nuk ekziston');
+    expect(response.body.error).toContain('No registered user exists');
   });
 
   it('e shton përdoruesin në hapësirë vetëm pasi ai e pranon ftesën', async () => {

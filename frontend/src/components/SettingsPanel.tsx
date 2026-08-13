@@ -21,11 +21,11 @@ interface SettingsPanelProps {
 }
 
 const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
-  { id: 'account', label: 'Llogaria', icon: <UserRound size={17} /> },
-  { id: 'security', label: 'Siguria', icon: <Lock size={17} /> },
-  { id: 'activity', label: 'Aktiviteti', icon: <History size={17} /> },
-  { id: 'notifications', label: 'Njoftimet', icon: <BellRing size={17} /> },
-  { id: 'users', label: 'Përdoruesit', icon: <UsersRound size={17} /> },
+  { id: 'account', label: 'Account', icon: <UserRound size={17} /> },
+  { id: 'security', label: 'Security', icon: <Lock size={17} /> },
+  { id: 'activity', label: 'Activity', icon: <History size={17} /> },
+  { id: 'notifications', label: 'Notifications', icon: <BellRing size={17} /> },
+  { id: 'users', label: 'Users', icon: <UsersRound size={17} /> },
 ];
 
 async function apiRequest<T>(url: string, method: string, body?: unknown): Promise<T> {
@@ -36,7 +36,7 @@ async function apiRequest<T>(url: string, method: string, body?: unknown): Promi
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await readApiJson<T>(response);
-  if (!response.ok) throw new Error(apiErrorMessage(response, data, 'Kërkesa nuk u krye. Provo përsëri.'));
+  if (!response.ok) throw new Error(apiErrorMessage(response, data, 'The request failed. Please try again.'));
   return data;
 }
 
@@ -116,7 +116,7 @@ export default function SettingsPanel({ user, isOpen, initialTab = 'account', on
     try {
       await request();
     } catch (error) {
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Ndodhi një gabim.' });
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'An error occurred.' });
     } finally {
       setSaving(false);
     }
@@ -128,14 +128,14 @@ export default function SettingsPanel({ user, isOpen, initialTab = 'account', on
       const data = await apiRequest<{ user: User; message?: string }>('/api/auth/profile', 'PUT', { firstName, lastName, email, currentPassword: profilePassword });
       onUserUpdate(data.user);
       setProfilePassword('');
-      setMessage({ type: 'success', text: data.message || 'Profili u ruajt.' });
+      setMessage({ type: 'success', text: data.message || 'Profile saved.' });
     });
   };
 
   const savePassword = (event: React.FormEvent) => {
     event.preventDefault();
     if (newPassword !== confirmPassword) {
-      setMessage({ type: 'error', text: 'Fjalëkalimet e reja nuk përputhen.' });
+      setMessage({ type: 'error', text: 'The new passwords do not match.' });
       return;
     }
     void runSave(async () => {
@@ -143,7 +143,7 @@ export default function SettingsPanel({ user, isOpen, initialTab = 'account', on
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      setMessage({ type: 'success', text: data.message || 'Fjalëkalimi u ndryshua.' });
+      setMessage({ type: 'success', text: data.message || 'Password changed.' });
     });
   };
 
@@ -154,7 +154,7 @@ export default function SettingsPanel({ user, isOpen, initialTab = 'account', on
       onUserUpdate({ ...user, hasRecoveryCode: true });
       setRecoveryPassword('');
       setRecoveryCode('');
-      setMessage({ type: 'success', text: data.message || 'Kodi u ruajt.' });
+      setMessage({ type: 'success', text: data.message || 'Recovery code saved.' });
     });
   };
 
@@ -163,25 +163,25 @@ export default function SettingsPanel({ user, isOpen, initialTab = 'account', on
     void runSave(async () => {
       const data = await apiRequest<{ user: User; message?: string }>('/api/auth/preferences', 'PUT', { emailNotifications, inAppNotifications });
       onUserUpdate(data.user);
-      setMessage({ type: 'success', text: data.message || 'Preferencat u ruajtën.' });
+      setMessage({ type: 'success', text: data.message || 'Preferences saved.' });
     });
   };
 
   const saveUserPassword = (event: React.FormEvent) => {
     event.preventDefault();
     if (!selectedUserId) {
-      setMessage({ type: 'error', text: 'Zgjidh përdoruesin.' });
+      setMessage({ type: 'error', text: 'Select a user.' });
       return;
     }
     if (adminPassword !== adminConfirmPassword) {
-      setMessage({ type: 'error', text: 'Fjalëkalimet e reja nuk përputhen.' });
+      setMessage({ type: 'error', text: 'The new passwords do not match.' });
       return;
     }
     void runSave(async () => {
       const data = await apiRequest<{ message?: string }>(`/api/auth/users/${encodeURIComponent(selectedUserId)}/password`, 'PUT', { newPassword: adminPassword });
       setAdminPassword('');
       setAdminConfirmPassword('');
-      setMessage({ type: 'success', text: data.message || 'Fjalëkalimi u ndryshua.' });
+      setMessage({ type: 'success', text: data.message || 'Password changed.' });
     });
   };
 
@@ -191,11 +191,11 @@ export default function SettingsPanel({ user, isOpen, initialTab = 'account', on
     <div className="settings-overlay" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <aside className="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <header className="settings-header">
-          <div><span className="settings-eyebrow">Virtuo</span><h2 id="settings-title">Cilësimet</h2></div>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Mbyll cilësimet"><X size={20} /></button>
+          <div><span className="settings-eyebrow">Virtuo</span><h2 id="settings-title">Settings</h2></div>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Close settings"><X size={20} /></button>
         </header>
 
-        <nav className={`settings-tabs ${user.role === 'ADMIN' ? 'admin-tabs' : ''}`} aria-label="Seksionet e cilësimeve">
+        <nav className={`settings-tabs ${user.role === 'ADMIN' ? 'admin-tabs' : ''}`} aria-label="Settings sections">
           {visibleTabs.map((item) => (
             <button key={item.id} type="button" className={tab === item.id ? 'active' : ''} onClick={() => { setTab(item.id); setMessage(null); }}>
               {item.icon}<span>{item.label}</span>
@@ -208,66 +208,66 @@ export default function SettingsPanel({ user, isOpen, initialTab = 'account', on
 
           {tab === 'account' && (
             <form className="settings-form" onSubmit={saveProfile}>
-              <div className="settings-section-heading"><h3>Të dhënat personale</h3><p>Përditëso emrin dhe adresën e email-it.</p></div>
+              <div className="settings-section-heading"><h3>Personal information</h3><p>Update your name and email address.</p></div>
               <div className="settings-grid">
-                <label>Emri<input className="input-field" value={firstName} onChange={(e) => setFirstName(e.target.value)} maxLength={60} required /></label>
-                <label>Mbiemri<input className="input-field" value={lastName} onChange={(e) => setLastName(e.target.value)} maxLength={60} required /></label>
+                <label>First name<input className="input-field" value={firstName} onChange={(e) => setFirstName(e.target.value)} maxLength={60} required /></label>
+                <label>Last name<input className="input-field" value={lastName} onChange={(e) => setLastName(e.target.value)} maxLength={60} required /></label>
               </div>
               <label>Email<input type="email" className="input-field" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
-              <label>Fjalëkalimi aktual<input type="password" className="input-field" value={profilePassword} onChange={(e) => setProfilePassword(e.target.value)} maxLength={128} autoComplete="current-password" required /></label>
-              <button className="btn btn-primary settings-save" disabled={saving}><Save size={17} /> Ruaj profilin</button>
+              <label>Current password<input type="password" className="input-field" value={profilePassword} onChange={(e) => setProfilePassword(e.target.value)} maxLength={128} autoComplete="current-password" required /></label>
+              <button className="btn btn-primary settings-save" disabled={saving}><Save size={17} /> Save profile</button>
             </form>
           )}
 
           {tab === 'security' && (
             <div className="settings-stack">
-              {!user.hasRecoveryCode && <div className="settings-message warning">Kjo llogari ende nuk ka kod rikuperimi. Vendose më poshtë që të mund ta rikthesh fjalëkalimin.</div>}
+              {!user.hasRecoveryCode && <div className="settings-message warning">This account does not have a recovery code yet. Set one below so you can recover your password.</div>}
               <form className="settings-form settings-card" onSubmit={savePassword}>
-                <div className="settings-section-heading"><h3>Ndrysho fjalëkalimin</h3><p>Përdor 12–128 karaktere dhe shmang fjalëkalimet e zakonshme.</p></div>
-                <label>Fjalëkalimi aktual<input type="password" className="input-field" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} maxLength={128} autoComplete="current-password" required /></label>
-                <label>Fjalëkalimi i ri<input type="password" className="input-field" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} minLength={12} maxLength={128} autoComplete="new-password" required /></label>
-                <label>Përsërit fjalëkalimin<input type="password" className="input-field" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} minLength={12} maxLength={128} autoComplete="new-password" required /></label>
-                <button className="btn btn-primary settings-save" disabled={saving}><Lock size={17} /> Ndrysho fjalëkalimin</button>
+                <div className="settings-section-heading"><h3>Change password</h3><p>Use 12–128 characters and avoid common passwords.</p></div>
+                <label>Current password<input type="password" className="input-field" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} maxLength={128} autoComplete="current-password" required /></label>
+                <label>New password<input type="password" className="input-field" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} minLength={12} maxLength={128} autoComplete="new-password" required /></label>
+                <label>Confirm password<input type="password" className="input-field" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} minLength={12} maxLength={128} autoComplete="new-password" required /></label>
+                <button className="btn btn-primary settings-save" disabled={saving}><Lock size={17} /> Change password</button>
               </form>
 
               <form className="settings-form settings-card" onSubmit={saveRecoveryCode}>
-                <div className="settings-section-heading"><h3>Kodi i rikuperimit</h3><p>Ruaje privatisht. Përdoret kur harron fjalëkalimin dhe nuk ruhet si tekst i lexueshëm.</p></div>
-                <label>Fjalëkalimi aktual<input type="password" className="input-field" value={recoveryPassword} onChange={(e) => setRecoveryPassword(e.target.value)} required /></label>
-                <label>Kodi i ri<input type="password" className="input-field" value={recoveryCode} onChange={(e) => setRecoveryCode(e.target.value)} minLength={10} maxLength={64} placeholder="10–64 karaktere" required /></label>
-                <button className="btn btn-secondary settings-save" disabled={saving}><KeyRound size={17} /> Ruaj kodin</button>
+                <div className="settings-section-heading"><h3>Recovery code</h3><p>Keep it private. It is used if you forget your password and is never stored as readable text.</p></div>
+                <label>Current password<input type="password" className="input-field" value={recoveryPassword} onChange={(e) => setRecoveryPassword(e.target.value)} required /></label>
+                <label>New code<input type="password" className="input-field" value={recoveryCode} onChange={(e) => setRecoveryCode(e.target.value)} minLength={10} maxLength={64} placeholder="10–64 characters" required /></label>
+                <button className="btn btn-secondary settings-save" disabled={saving}><KeyRound size={17} /> Save code</button>
               </form>
             </div>
           )}
 
           {tab === 'activity' && (
             <section>
-              <div className="settings-section-heading"><h3>Historiku i aktivitetit</h3><p>50 veprimet më të fundit në llogarinë tënde.</p></div>
-              {loadingActivity ? <p className="settings-empty">Duke u ngarkuar...</p> : activities.length === 0 ? <p className="settings-empty">Ende nuk ka aktivitet të regjistruar.</p> : (
-                <div className="activity-list">{activities.map((item) => <article key={item.id}><span className="activity-dot" /><div><strong>{item.description}</strong><time>{new Date(item.createdAt).toLocaleString('sq-AL')}</time></div></article>)}</div>
+              <div className="settings-section-heading"><h3>Activity history</h3><p>The 50 most recent actions on your account.</p></div>
+              {loadingActivity ? <p className="settings-empty">Loading...</p> : activities.length === 0 ? <p className="settings-empty">No recorded activity yet.</p> : (
+                <div className="activity-list">{activities.map((item) => <article key={item.id}><span className="activity-dot" /><div><strong>{item.description}</strong><time>{new Date(item.createdAt).toLocaleString('en-GB')}</time></div></article>)}</div>
               )}
             </section>
           )}
 
           {tab === 'notifications' && (
             <form className="settings-form" onSubmit={savePreferences}>
-              <div className="settings-section-heading"><h3>Preferencat e njoftimeve</h3><p>Zgjidh si dëshiron të njoftohesh për detyrat.</p></div>
-              <label className="preference-row"><div><strong>Njoftimet në aplikacion</strong><span>Shfaq njoftimet te ikona e ziles.</span></div><input type="checkbox" checked={inAppNotifications} onChange={(e) => setInAppNotifications(e.target.checked)} /></label>
-              <label className="preference-row"><div><strong>Njoftimet me email</strong><span>Dërgo email kur caktohesh në një detyrë.</span></div><input type="checkbox" checked={emailNotifications} onChange={(e) => setEmailNotifications(e.target.checked)} /></label>
-              <button className="btn btn-primary settings-save" disabled={saving}><Save size={17} /> Ruaj preferencat</button>
+              <div className="settings-section-heading"><h3>Notification preferences</h3><p>Choose how you want to be notified about tasks.</p></div>
+              <label className="preference-row"><div><strong>In-app notifications</strong><span>Show notifications under the bell icon.</span></div><input type="checkbox" checked={inAppNotifications} onChange={(e) => setInAppNotifications(e.target.checked)} /></label>
+              <label className="preference-row"><div><strong>Email notifications</strong><span>Send an email when a task is assigned to you.</span></div><input type="checkbox" checked={emailNotifications} onChange={(e) => setEmailNotifications(e.target.checked)} /></label>
+              <button className="btn btn-primary settings-save" disabled={saving}><Save size={17} /> Save preferences</button>
             </form>
           )}
 
           {tab === 'users' && user.role === 'ADMIN' && (
             <form className="settings-form" onSubmit={saveUserPassword}>
               <div className="settings-section-heading">
-                <h3>Menaxhimi i përdoruesve</h3>
-                <p>Vendos një fjalëkalim të ri. Përdoruesi do të dalë automatikisht nga sesionet ekzistuese.</p>
+                <h3>User management</h3>
+                <p>Set a new password. The user will be signed out of all existing sessions.</p>
               </div>
-              {loadingUsers ? <p className="settings-empty">Duke i ngarkuar përdoruesit...</p> : (
+              {loadingUsers ? <p className="settings-empty">Loading users...</p> : (
                 <label>
-                  Përdoruesi
+                  User
                   <select className="input-field" value={selectedUserId} onChange={(event) => { setSelectedUserId(event.target.value); setMessage(null); }} required>
-                    <option value="">Zgjidh përdoruesin</option>
+                    <option value="">Select a user</option>
                     {adminUsers.filter((account) => account.id !== user.id).map((account) => (
                       <option key={account.id} value={account.id}>
                         {account.firstName} {account.lastName} — {account.email} ({account.role})
@@ -276,10 +276,10 @@ export default function SettingsPanel({ user, isOpen, initialTab = 'account', on
                   </select>
                 </label>
               )}
-              <label>Fjalëkalimi i ri<input type="password" className="input-field" value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} minLength={12} maxLength={128} autoComplete="new-password" required /></label>
-              <label>Përsërit fjalëkalimin<input type="password" className="input-field" value={adminConfirmPassword} onChange={(event) => setAdminConfirmPassword(event.target.value)} minLength={12} maxLength={128} autoComplete="new-password" required /></label>
+              <label>New password<input type="password" className="input-field" value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} minLength={12} maxLength={128} autoComplete="new-password" required /></label>
+              <label>Confirm password<input type="password" className="input-field" value={adminConfirmPassword} onChange={(event) => setAdminConfirmPassword(event.target.value)} minLength={12} maxLength={128} autoComplete="new-password" required /></label>
               <button className="btn btn-primary settings-save" disabled={saving || loadingUsers || !selectedUserId}>
-                <KeyRound size={17} /> {saving ? 'Duke u ndryshuar...' : 'Ndrysho fjalëkalimin'}
+                <KeyRound size={17} /> {saving ? 'Changing...' : 'Change password'}
               </button>
             </form>
           )}

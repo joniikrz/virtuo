@@ -1,14 +1,12 @@
 import React from 'react';
-import { Check, FolderKanban, ListChecks, ListTodo, LockKeyhole, Plus, UserPlus, Users } from 'lucide-react';
+import { Check, FolderKanban, ListTodo, LockKeyhole, Plus, UserPlus, Users } from 'lucide-react';
 import { Space } from '../types';
 
 interface SpaceSidebarProps {
   spaces: Space[];
   activeSpace: Space | null;
   isAdmin: boolean;
-  isMyTasks: boolean;
   onSelectSpace: (space: Space) => void;
-  onShowMyTasks: () => void;
   onShowCreateSpace: () => void;
   onShowRegisterUser: () => void;
 }
@@ -17,9 +15,7 @@ export default function SpaceSidebar({
   spaces,
   activeSpace,
   isAdmin,
-  isMyTasks,
   onSelectSpace,
-  onShowMyTasks,
   onShowCreateSpace,
   onShowRegisterUser
 }: SpaceSidebarProps) {
@@ -27,32 +23,20 @@ export default function SpaceSidebar({
     <aside className="sidebar workspace-sidebar">
       <div className="workspace-sidebar__heading">
         <div>
-          <span className="sidebar-title">Hapësirat e punës</span>
-          <p>{spaces.length} {spaces.length === 1 ? 'hapësirë private' : 'hapësira private'}</p>
+          <span className="sidebar-title">Workspaces</span>
+          <p>{spaces.length} private {spaces.length === 1 ? 'workspace' : 'workspaces'}</p>
         </div>
         <button
           onClick={onShowCreateSpace}
           className="workspace-add-button"
-          title="Krijo hapësirë të re"
-          aria-label="Krijo hapësirë të re"
+          title="Create a new workspace"
+          aria-label="Create a new workspace"
         >
           <Plus size={18} />
         </button>
       </div>
 
       <div className="space-list">
-        <button
-          type="button"
-          className={`space-card my-tasks-card ${isMyTasks ? 'active' : ''}`}
-          onClick={onShowMyTasks}
-          aria-pressed={isMyTasks}
-          style={{ '--space-accent': '#7048e8' } as React.CSSProperties}
-        >
-          <span className="space-card__icon"><ListChecks size={19} /></span>
-          <span className="space-card__body"><span className="space-card__name">Detyrat e mia</span><span className="space-card__meta">Nga të gjitha hapësirat</span></span>
-          {isMyTasks && <span className="space-card__selected"><Check size={13} /></span>}
-        </button>
-
         {spaces.map((space) => {
           const isActive = activeSpace?.id === space.id;
           const color = space.color || '#7048e8';
@@ -82,10 +66,10 @@ export default function SpaceSidebar({
         {spaces.length === 0 && (
           <div className="workspace-empty">
             <span><FolderKanban size={25} /></span>
-            <strong>Nuk ka hapësira</strong>
-            <p>Krijo hapësirën e parë dhe organizo detyrat me ekipin.</p>
+            <strong>No workspaces yet</strong>
+            <p>Create your first workspace and organize tasks with your team.</p>
             <button type="button" onClick={onShowCreateSpace} className="btn btn-primary btn-sm">
-              <Plus size={15} /> Krijo hapësirë
+              <Plus size={15} /> Create workspace
             </button>
           </div>
         )}
@@ -95,7 +79,7 @@ export default function SpaceSidebar({
         <div className="workspace-sidebar__footer">
           <button onClick={onShowRegisterUser} className="btn btn-secondary btn-sm">
             <UserPlus size={16} />
-            <span>Regjistro punonjës</span>
+            <span>Register employee</span>
           </button>
         </div>
       )}
