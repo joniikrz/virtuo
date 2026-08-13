@@ -8,24 +8,26 @@ type SettingsTab = 'account' | 'security' | 'activity' | 'notifications' | 'user
 interface ActivityItem {
   id: string;
   action: string;
-  description: string;
+  title: string;
+  message: string;
+  taskId: string | null;
   createdAt: string;
 }
 
-function activityDescription(item: ActivityItem): string {
-  const fixed: Record<string, string> = {
-    LOGIN: 'Signed in',
-    PASSWORD_CHANGED: 'Changed password',
-    PASSWORD_RESET_BY_ADMIN: 'Password changed by an administrator',
-    PROFILE_UPDATED: 'Updated profile details',
-    NOTIFICATION_SETTINGS: 'Updated notification preferences',
-    RECOVERY_CODE_UPDATED: 'Changed recovery code',
-    PASSWORD_RESET: 'Reset password with a recovery code',
+function taskActivityText(item: ActivityItem): { title: string; message: string } {
+  const titles: Record<string, string> = {
+    TASK_ASSIGNED: 'New task',
+    TASK_COMPLETED: 'Task completed',
+    COMMENT_ADDED: 'New comment',
+    ATTACHMENT_ADDED: 'New file',
+    DEADLINE_APPROACHING: 'Deadline approaching',
   };
-  if (fixed[item.action]) return fixed[item.action];
-  return item.description
-    .replace(/^Ndryshoi fjalëkalimin e\s+/i, 'Changed the password for ')
-    .replace(/^Fshiu llogarinë\s+/i, 'Deleted the account ');
+  let message = item.message;
+  message = message.replace(/^Ju është caktuar detyra:\s*/i, 'You were assigned the task: ');
+  message = message.replace(/^Detyra u përfundua:\s*/i, 'Task completed: ');
+  message = message.replace(/^(.+) komentoi në detyrën:\s*/i, '$1 commented on the task: ');
+  message = message.replace(/^(.+) bashkëngjiti një skedar në detyrën:\s*/i, '$1 attached a file to the task: ');
+  return { title: titles[item.action] || item.title, message };
 }
 
 interface SettingsPanelProps {
@@ -257,9 +259,12 @@ export default function SettingsPanel({ user, isOpen, initialTab = 'account', on
 
           {tab === 'activity' && (
             <section>
-              <div className="settings-section-heading"><h3>Activity history</h3><p>The 50 most recent actions on your account.</p></div>
-              {loadingActivity ? <p className="settings-empty">Loading...</p> : activities.length === 0 ? <p className="settings-empty">No recorded activity yet.</p> : (
-                <div className="activity-list">{activities.map((item) => <article key={item.id}><span className="activity-dot" /><div><strong>{activityDescription(item)}</strong><time>{new Date(item.createdAt).toLocaleString('en-GB')}</time></div></article>)}</div>
+              <div className="settings-section-heading"><h3>Task activity</h3><p>Your 50 most recent task notifications.</p></div>
+              {loadingActivity ? <p className="settings-empty">Loading...</p> : activities.length === 0 ? <p className="settings-empty">No task activity yet.</p> : (
+                <div className="activity-list">{activities.map((item) => {
+                  const display = taskActivityText(item);
+                  return <article key={item.id}><span className="activity-dot" /><div><strong>{display.title}</strong><p>{display.message}</p><time>{new Date(item.createdAt).toLocaleString('en-GB')}</time></div></article>;
+                })}</div>
               )}
             </section>
           )}

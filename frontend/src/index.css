@@ -1403,6 +1403,7 @@ body { background-color: hsl(var(--bg-deep)); }
 .activity-list article:not(:last-child)::before { content: ''; position: absolute; left: 5px; top: 11px; bottom: 0; width: 1px; background: hsl(var(--border-light)); }
 .activity-dot { position: relative; z-index: 1; width: 11px; height: 11px; margin-top: 4px; border: 3px solid hsl(var(--bg-card)); border-radius: 50%; background: hsl(var(--primary)); box-shadow: 0 0 0 2px hsl(var(--primary) / .2); }
 .activity-list strong { display: block; font-size: .8rem; font-weight: 650; line-height: 1.4; }
+.activity-list p { margin-top: 2px; color: hsl(var(--text-secondary)); font-size: .75rem; line-height: 1.45; }
 .activity-list time { display: block; margin-top: 3px; color: hsl(var(--text-muted)); font-size: .68rem; }
 .preference-row { flex-direction: row !important; align-items: center; justify-content: space-between; gap: 20px; padding: 15px; border: 1px solid hsl(var(--border-muted)); border-radius: 13px; background: hsl(var(--bg-secondary) / .55); cursor: pointer; }
 .preference-row > div { display: flex; flex-direction: column; gap: 3px; }

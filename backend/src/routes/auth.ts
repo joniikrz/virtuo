@@ -682,15 +682,35 @@ router.get('/activity', authenticateToken, async (req: AuthRequest, res: Respons
   }
 
   try {
-    const activities = await prisma.activityLog.findMany({
-      where: { userId },
+    const taskNotifications = await prisma.notification.findMany({
+      where: {
+        userId,
+        taskId: { not: null },
+      },
       orderBy: { createdAt: 'desc' },
       take: 50,
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        message: true,
+        taskId: true,
+        createdAt: true,
+      },
     });
-    res.json({ activities });
+    res.json({
+      activities: taskNotifications.map((notification) => ({
+        id: notification.id,
+        action: notification.type,
+        title: notification.title,
+        message: notification.message,
+        taskId: notification.taskId,
+        createdAt: notification.createdAt,
+      })),
+    });
   } catch (error) {
-    console.error('Activity history error:', error);
-    res.status(500).json({ error: 'An error occurred while retrieving activity history' });
+    console.error('Task activity history error:', error);
+    res.status(500).json({ error: 'An error occurred while retrieving task activity' });
   }
 });
 

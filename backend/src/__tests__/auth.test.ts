@@ -29,7 +29,7 @@ vi.mock('../prisma', () => ({
     task: { findMany: vi.fn() },
     attachment: { findMany: vi.fn() },
     comment: { findMany: vi.fn() },
-    notification: { deleteMany: vi.fn() },
+    notification: { findMany: vi.fn(), deleteMany: vi.fn() },
   },
 }));
 
@@ -44,6 +44,30 @@ describe('Auth Endpoints API Tests', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ user: null });
     expect(res.headers['cache-control']).toBe('no-store');
+  });
+
+  it('GET /api/auth/activity - returns only task notifications', async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: 'u1', email: 'user@virtuo.local', firstName: 'User', lastName: 'One',
+      sessionVersion: 0, role: { name: 'USER' }, emailNotifications: true, inAppNotifications: true,
+    } as never);
+    vi.mocked(prisma.notification.findMany).mockResolvedValue([{
+      id: 'notification-1', type: 'COMMENT_ADDED', title: 'New comment',
+      message: 'Alex commented on the task: Report', taskId: 'task-1', createdAt: new Date('2026-08-13T10:00:00.000Z'),
+    }] as never);
+    const token = signSessionToken('u1', 0);
+
+    const res = await request(app)
+      .get('/api/auth/activity')
+      .set('Cookie', [`token=${token}`]);
+
+    expect(res.status).toBe(200);
+    expect(prisma.notification.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId: 'u1', taskId: { not: null } },
+    }));
+    expect(res.body.activities).toEqual([expect.objectContaining({
+      action: 'COMMENT_ADDED', taskId: 'task-1', title: 'New comment',
+    })]);
   });
 
   it('POST /api/auth/register - Registron me sukses përdoruesin e ri', async () => {
