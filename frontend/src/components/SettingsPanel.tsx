@@ -12,6 +12,22 @@ interface ActivityItem {
   createdAt: string;
 }
 
+function activityDescription(item: ActivityItem): string {
+  const fixed: Record<string, string> = {
+    LOGIN: 'Signed in',
+    PASSWORD_CHANGED: 'Changed password',
+    PASSWORD_RESET_BY_ADMIN: 'Password changed by an administrator',
+    PROFILE_UPDATED: 'Updated profile details',
+    NOTIFICATION_SETTINGS: 'Updated notification preferences',
+    RECOVERY_CODE_UPDATED: 'Changed recovery code',
+    PASSWORD_RESET: 'Reset password with a recovery code',
+  };
+  if (fixed[item.action]) return fixed[item.action];
+  return item.description
+    .replace(/^Ndryshoi fjalëkalimin e\s+/i, 'Changed the password for ')
+    .replace(/^Fshiu llogarinë\s+/i, 'Deleted the account ');
+}
+
 interface SettingsPanelProps {
   user: User;
   isOpen: boolean;
@@ -243,7 +259,7 @@ export default function SettingsPanel({ user, isOpen, initialTab = 'account', on
             <section>
               <div className="settings-section-heading"><h3>Activity history</h3><p>The 50 most recent actions on your account.</p></div>
               {loadingActivity ? <p className="settings-empty">Loading...</p> : activities.length === 0 ? <p className="settings-empty">No recorded activity yet.</p> : (
-                <div className="activity-list">{activities.map((item) => <article key={item.id}><span className="activity-dot" /><div><strong>{item.description}</strong><time>{new Date(item.createdAt).toLocaleString('en-GB')}</time></div></article>)}</div>
+                <div className="activity-list">{activities.map((item) => <article key={item.id}><span className="activity-dot" /><div><strong>{activityDescription(item)}</strong><time>{new Date(item.createdAt).toLocaleString('en-GB')}</time></div></article>)}</div>
               )}
             </section>
           )}

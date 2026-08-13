@@ -12,6 +12,27 @@ interface NotificationsPanelProps {
   onClose: () => void;
 }
 
+function notificationText(notification: Notification): { title: string; message: string } {
+  const titles: Record<string, string> = {
+    TASK_ASSIGNED: 'New task',
+    TASK_COMPLETED: 'Task completed',
+    COMMENT_ADDED: 'New comment',
+    ATTACHMENT_ADDED: 'New file',
+    SPACE_INVITE: 'Workspace invitation',
+    SPACE_INVITE_ACCEPTED: 'Invitation accepted',
+    SPACE_INVITE_REJECTED: 'Invitation declined',
+  };
+  let message = notification.message;
+  message = message.replace(/^Ju është caktuar detyra:\s*/i, 'You were assigned the task: ');
+  message = message.replace(/^Detyra u përfundua:\s*/i, 'Task completed: ');
+  message = message.replace(/^(.+) komentoi në detyrën:\s*/i, '$1 commented on the task: ');
+  message = message.replace(/^(.+) bashkëngjiti një skedar në detyrën:\s*/i, '$1 attached a file to the task: ');
+  message = message.replace(/^(.+) të ftoi në hapësirën:\s*/i, '$1 invited you to the workspace: ');
+  message = message.replace(/^(.+) pranoi ftesën për:\s*/i, '$1 accepted the invitation to: ');
+  message = message.replace(/^(.+) refuzoi ftesën për:\s*/i, '$1 declined the invitation to: ');
+  return { title: titles[notification.type] || notification.title, message };
+}
+
 export default function NotificationsPanel({ notifications, onMarkAsRead, onMarkAllAsRead, onOpenTask, onRespondToSpaceInvite, isOpen, onClose }: NotificationsPanelProps) {
   const unreadCount = notifications.filter((notification) => !notification.isRead).length;
   const [respondingId, setRespondingId] = useState<string | null>(null);
@@ -79,6 +100,7 @@ export default function NotificationsPanel({ notifications, onMarkAsRead, onMark
             </div>
           ) : (
             notifications.map((notification) => {
+              const display = notificationText(notification);
               const isSpaceInvite = notification.type === 'SPACE_INVITE' && Boolean(notification.spaceInviteId || notification.resourceId);
               if (isSpaceInvite) {
                 const isResponding = respondingId === notification.id;
@@ -86,8 +108,8 @@ export default function NotificationsPanel({ notifications, onMarkAsRead, onMark
                   <article key={notification.id} className={`notification-drawer__item notification-drawer__invite ${notification.isRead ? '' : 'unread'}`}>
                     <span className="notification-drawer__status" aria-hidden="true" />
                     <div className="notification-drawer__content">
-                      <strong>{notification.title}</strong>
-                      <p>{notification.message}</p>
+                      <strong>{display.title}</strong>
+                      <p>{display.message}</p>
                       <time dateTime={notification.createdAt}>{new Date(notification.createdAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</time>
                       <div className="notification-invite-actions">
                         <button type="button" className="btn btn-primary btn-sm" disabled={isResponding} onClick={() => void respondToInvite(notification, 'accept')}>
@@ -114,8 +136,8 @@ export default function NotificationsPanel({ notifications, onMarkAsRead, onMark
                 >
                   <span className="notification-drawer__status" aria-hidden="true" />
                   <div className="notification-drawer__content">
-                    <strong>{notification.title}</strong>
-                    <p>{notification.message}</p>
+                    <strong>{display.title}</strong>
+                    <p>{display.message}</p>
                     <time dateTime={notification.createdAt}>{new Date(notification.createdAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</time>
                   </div>
                   {notification.taskId && <ChevronRight className="notification-drawer__open-icon" size={17} aria-hidden="true" />}

@@ -189,7 +189,7 @@ async function createTaskActivityNotifications(
         userId: recipient.id,
         taskId: task.id,
         type: isComment ? 'COMMENT_ADDED' : 'ATTACHMENT_ADDED',
-        title: isComment ? 'Koment i ri' : 'Skedar i ri',
+        title: isComment ? 'New comment' : 'New file',
         message: isComment
           ? `${actorName} commented on the task: ${task.title}`
           : `${actorName} attached a file to the task: ${task.title}`,
