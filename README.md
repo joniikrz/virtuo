@@ -1,5 +1,7 @@
 # Virtuo Task Manager
 
+Dokumentimi i arkitekturës: [Hexagonal Architecture (Ports & Adapters)](docs/ARCHITECTURE.md)
+
 Virtuo është aplikacion full-stack për menaxhimin e hapësirave private dhe detyrave të ekipit.
 
 ## Teknologjitë

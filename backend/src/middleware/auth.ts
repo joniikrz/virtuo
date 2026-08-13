@@ -1,19 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import prisma from '../prisma';
-import { verifyToken } from '../security';
+import { AuthenticatedUser } from '../domain/auth/authenticated-user';
+import { application } from '../composition-root';
 
 
 export interface AuthRequest extends Request {
-  user?: {
-    id: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    role: string;
-    emailNotifications: boolean;
-    inAppNotifications: boolean;
-    hasRecoveryCode: boolean;
-  };
+  user?: AuthenticatedUser;
 }
 
 /**
@@ -40,40 +31,24 @@ export const authenticateToken = async (
   }
 
   try {
-    const decoded = verifyToken(token) as { userId?: string; sessionVersion?: number };
-    if (!decoded.userId) {
-      res.status(401).json({ error: 'Sesioni nuk është i vlefshëm' });
+    const result = await application.authenticateSession.execute(token);
+    if (result.ok === false) {
+      if (result.reason === 'USER_NOT_FOUND') {
+        res.status(401).json({ error: 'Përdoruesi nuk u gjet ose është fshirë' });
+        return;
+      }
+      if (result.reason === 'SESSION_EXPIRED') {
+        res.status(401).json({ error: 'Sesioni ka skaduar. Ju lutem kyçuni përsëri.' });
+        return;
+      }
+      res.status(403).json({ error: 'Token i pavlefshëm ose i skaduar' });
       return;
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      include: { role: true },
-    });
-
-    if (!user) {
-      res.status(401).json({ error: 'Përdoruesi nuk u gjet ose është fshirë' });
-      return;
-    }
-
-    if ((decoded.sessionVersion ?? 0) !== user.sessionVersion) {
-      res.status(401).json({ error: 'Sesioni ka skaduar. Ju lutem kyçuni përsëri.' });
-      return;
-    }
-
-    req.user = {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role.name,
-      emailNotifications: user.emailNotifications,
-      inAppNotifications: user.inAppNotifications,
-      hasRecoveryCode: Boolean(user.recoveryCodeHash),
-    };
+    req.user = result.user;
 
     next();
-  } catch (error) {
+  } catch {
     res.status(403).json({ error: 'Token i pavlefshëm ose i skaduar' });
     return;
   }

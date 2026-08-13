@@ -7,7 +7,8 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
-RUN npm run build
+RUN npm run build \
+    && find dist -type f \( -name '*.map' -o -name '*.ts' -o -name '*.tsx' \) -delete
 
 # 2. Stage për shërbimin me Nginx
 FROM nginx:alpine

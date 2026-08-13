@@ -6,12 +6,12 @@ import fs from 'fs';
 import prisma from '../prisma';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { sendTaskAssignedEmail, sendTaskCompletedEmail } from '../services/email';
+import { application } from '../composition-root';
+import { AccessDeniedError } from '../application/shared/errors';
+import { isTaskPriority, isTaskStatus, parseAssigneeIds, parseTaskDeadline } from '../domain/tasks/task-policy';
 
 const router = Router({ mergeParams: true });
 const uploadDirectory = path.resolve(process.env.UPLOAD_DIR || 'uploads');
-const validStatuses = new Set(['TODO', 'IN_PROGRESS', 'COMPLETED']);
-const validPriorities = new Set(['LOW', 'NORMAL', 'HIGH', 'URGENT']);
-const taskListLimit = Math.max(50, Math.min(Number(process.env.TASK_LIST_LIMIT) || 500, 2000));
 const maxUploadBytes = Math.max(1024, Math.min(Number(process.env.MAX_UPLOAD_BYTES) || 10 * 1024 * 1024, 25 * 1024 * 1024));
 fs.mkdirSync(uploadDirectory, { recursive: true });
 
@@ -82,32 +82,11 @@ const taskInclude = {
   _count: { select: { comments: true, attachments: true } },
 } as const;
 
-// Listat e bordit nuk duhet të ngarkojnë historikun e plotë të komenteve dhe skedarëve.
-const taskListInclude = {
-  space: { select: { id: true, name: true, color: true } },
-  assignedTo: { select: { id: true, email: true, firstName: true, lastName: true } },
-  assignees: { include: { user: { select: { id: true, email: true, firstName: true, lastName: true } } } },
-  createdBy: { select: { id: true, firstName: true, lastName: true } },
-  tags: { include: { tag: true } },
-  _count: { select: { comments: true, attachments: true } },
-} as const;
-
 const taskAccessInclude = {
   assignedTo: { select: { id: true, email: true, firstName: true, lastName: true, emailNotifications: true, inAppNotifications: true } },
   assignees: { include: { user: { select: { id: true, email: true, firstName: true, lastName: true, emailNotifications: true, inAppNotifications: true } } } },
   createdBy: { select: { id: true, email: true, firstName: true, lastName: true, emailNotifications: true, inAppNotifications: true } },
 } as const;
-
-function validDate(value: unknown): Date | null {
-  if (typeof value !== 'string' || !value.trim()) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function parseAssignedUserIds(multipleValue: unknown, legacyValue: unknown): string[] {
-  const candidates: unknown[] = Array.isArray(multipleValue) ? multipleValue : [legacyValue];
-  return [...new Set(candidates.filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= 100))];
-}
 
 async function spaceAccess(spaceId: string, userId: string) {
   const space = await prisma.space.findUnique({ where: { id: spaceId } });
@@ -237,34 +216,22 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   const spaceId = req.params.spaceId || (req.query.spaceId as string | undefined);
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
   try {
-    const assignedOnly = req.query.scope === 'assigned';
-    let taskFilter: any = assignedOnly
-      ? { OR: [{ assignedToId: userId }, { assignees: { some: { userId } } }] }
-      : { OR: [{ createdById: userId }, { assignedToId: userId }, { assignees: { some: { userId } } }] };
-    if (spaceId) {
-      const access = await spaceAccess(spaceId, userId);
-      if (!access.canView) return res.status(403).json({ error: 'Nuk keni leje për këtë hapësirë' });
-      taskFilter = { ...taskFilter, spaceId };
-    }
-    const revision = await prisma.task.aggregate({
-      where: taskFilter,
-      _count: { id: true },
-      _max: { updatedAt: true },
+    const result = await application.listTasks.execute({
+      userId,
+      spaceId,
+      assignedOnly: req.query.scope === 'assigned',
+      ifNoneMatch: req.headers['if-none-match'],
     });
-    const etag = `W/"tasks-${revision._count.id}-${revision._max.updatedAt?.getTime() || 0}"`;
-    res.setHeader('ETag', etag);
+    res.setHeader('ETag', result.etag);
     res.setHeader('Cache-Control', 'private, no-cache');
-    if (req.headers['if-none-match'] === etag) return res.status(304).end();
-
-    const tasks = await prisma.task.findMany({
-      where: taskFilter,
-      include: taskListInclude,
-      orderBy: { createdAt: 'desc' },
-      take: taskListLimit,
-    });
-    res.setHeader('X-Result-Limit', String(taskListLimit));
-    return res.json(tasks);
-  } catch (error) { console.error('Fetch tasks error:', error); return res.status(500).json({ error: 'Gabim gjatë marrjes së detyrave' }); }
+    if (result.notModified) return res.status(304).end();
+    res.setHeader('X-Result-Limit', String(result.resultLimit));
+    return res.json(result.tasks);
+  } catch (error) {
+    if (error instanceof AccessDeniedError) return res.status(403).json({ error: error.message });
+    console.error('Fetch tasks error:', error);
+    return res.status(500).json({ error: 'Gabim gjatë marrjes së detyrave' });
+  }
 });
 
 router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -287,14 +254,14 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   const title = typeof req.body.title === 'string' ? req.body.title.trim() : '';
   const description = typeof req.body.description === 'string' ? req.body.description.trim() : '';
   const { status = 'TODO', priority = 'NORMAL', deadline } = req.body;
-  const assignedToIds = parseAssignedUserIds(req.body.assignedToIds, req.body.assignedToId);
+  const assignedToIds = parseAssigneeIds(req.body.assignedToIds, req.body.assignedToId);
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
   if (!title || typeof spaceId !== 'string' || assignedToIds.length === 0) return res.status(400).json({ error: 'Titulli, hapësira dhe së paku një person i caktuar janë të detyrueshëm' });
   if (title.length > 160 || description.length > 10_000) return res.status(400).json({ error: 'Titulli ose përshkrimi është shumë i gjatë' });
   if (assignedToIds.length > 100) return res.status(400).json({ error: 'Një detyrë mund t’u caktohet maksimumi 100 anëtarëve' });
-  const parsedDeadline = validDate(deadline);
+  const parsedDeadline = parseTaskDeadline(deadline);
   if (!parsedDeadline) return res.status(400).json({ error: 'Afati i fundit nuk është i vlefshëm' });
-  if (!validStatuses.has(status) || !validPriorities.has(priority)) return res.status(400).json({ error: 'Statusi ose prioriteti nuk është i vlefshëm' });
+  if (!isTaskStatus(status) || !isTaskPriority(priority)) return res.status(400).json({ error: 'Statusi ose prioriteti nuk është i vlefshëm' });
   try {
     const access = await spaceAccess(spaceId, userId);
     if (!access.isMember) return res.status(403).json({ error: 'Duhet të jeni anëtar i hapësirës për të krijuar detyra' });
@@ -316,7 +283,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 router.put('/:id/status', authenticateToken, async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
-  if (!validStatuses.has(req.body.status)) return res.status(400).json({ error: 'Status i pavlefshëm' });
+  if (!isTaskStatus(req.body.status)) return res.status(400).json({ error: 'Status i pavlefshëm' });
   try {
     const access = await taskAccess(req.params.id, userId);
     if (!access.task) return res.status(404).json({ error: 'Detyra nuk u gjet' });
@@ -452,15 +419,15 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
   if (!userId) return res.status(401).json({ error: 'I paautorizuar' });
   const { title, description, status, priority, deadline } = req.body;
   const hasAssignmentUpdate = Array.isArray(req.body.assignedToIds) || req.body.assignedToId !== undefined;
-  const assignedToIds = parseAssignedUserIds(req.body.assignedToIds, req.body.assignedToId);
+  const assignedToIds = parseAssigneeIds(req.body.assignedToIds, req.body.assignedToId);
   const normalizedTitle = typeof title === 'string' ? title.trim() : undefined;
   const normalizedDescription = typeof description === 'string' ? description.trim() : undefined;
-  if (status !== undefined && !validStatuses.has(status) || priority !== undefined && !validPriorities.has(priority)) return res.status(400).json({ error: 'Statusi ose prioriteti nuk është i vlefshëm' });
+  if (status !== undefined && !isTaskStatus(status) || priority !== undefined && !isTaskPriority(priority)) return res.status(400).json({ error: 'Statusi ose prioriteti nuk është i vlefshëm' });
   if (hasAssignmentUpdate && assignedToIds.length === 0) return res.status(400).json({ error: 'Së paku një person i caktuar është i detyrueshëm' });
   if (hasAssignmentUpdate && assignedToIds.length > 100) return res.status(400).json({ error: 'Një detyrë mund t’u caktohet maksimumi 100 anëtarëve' });
   if (title !== undefined && (!normalizedTitle || normalizedTitle.length > 160)) return res.status(400).json({ error: 'Titulli duhet të ketë 1 deri në 160 karaktere' });
   if (description !== undefined && (normalizedDescription === undefined || normalizedDescription.length > 10_000)) return res.status(400).json({ error: 'Përshkrimi mund të ketë maksimumi 10000 karaktere' });
-  const parsedDeadline = deadline === undefined ? undefined : validDate(deadline);
+  const parsedDeadline = deadline === undefined ? undefined : parseTaskDeadline(deadline);
   if (deadline !== undefined && !parsedDeadline) return res.status(400).json({ error: 'Afati i fundit nuk është i vlefshëm' });
   try {
     const access = await taskAccess(req.params.id, userId);
