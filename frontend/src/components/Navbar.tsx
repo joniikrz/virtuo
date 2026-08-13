@@ -33,13 +33,13 @@ export default function Navbar({ user, onLogout, onUserUpdate, notifications, on
 
         <div className="nav-user" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           
-          <ThemeToggle />
-
           {user.role !== 'ADMIN' && (
             <button type="button" className={`nav-my-tasks ${isMyTasks ? 'active' : ''}`} onClick={onShowMyTasks} aria-pressed={isMyTasks} title="View tasks assigned to you across every workspace">
               <ListChecks size={17} /><span>My Tasks</span>
             </button>
           )}
+
+          <ThemeToggle />
 
           <button
             type="button"

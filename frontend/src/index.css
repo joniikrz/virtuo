@@ -43,7 +43,7 @@
 }
 
 body {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
   background-color: hsl(var(--bg-deep));
   color: hsl(var(--text-primary));
   min-height: 100vh;
@@ -56,9 +56,16 @@ body {
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans);
   font-weight: 600;
   letter-spacing: -0.02em;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-sans);
 }
 
 /* Scrollbar styling */
@@ -254,7 +261,7 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans);
   font-weight: 600;
   font-size: 0.95rem;
   padding: 12px 24px;
@@ -332,7 +339,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .nav-logo {
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans);
   font-size: 1.6rem;
   font-weight: 800;
   letter-spacing: -0.03em;
@@ -359,11 +366,24 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: 10px;
   background: hsl(var(--bg-primary));
   color: hsl(var(--text-secondary));
-  font: inherit;
+  font-family: var(--font-sans);
   font-size: .86rem;
   font-weight: 700;
+  line-height: 1;
+  letter-spacing: -.01em;
   cursor: pointer;
   transition: var(--transition-fast);
+}
+
+.nav-theme-toggle {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 38px;
 }
 
 .nav-my-tasks:hover,
@@ -897,7 +917,7 @@ input:checked + .slider:before {
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
 .stat-card { background: hsl(var(--bg-card)); border: 1px solid hsl(var(--border-muted)); border-radius: var(--border-radius-md); padding: 20px; transition: var(--transition-smooth); }
 .stat-card:hover { border-color: hsl(var(--border-light)); transform: translateY(-2px); box-shadow: var(--shadow-premium); }
-.stat-card .stat-value { font-size: 2rem; font-weight: 800; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+.stat-card .stat-value { font-size: 2rem; font-weight: 800; font-family: var(--font-sans); }
 .stat-card .stat-label { font-size: 0.8rem; color: hsl(var(--text-muted)); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
 .progress-bar-bg { width: 100%; height: 8px; background: hsl(var(--border-muted)); border-radius: 4px; overflow: hidden; }
 .progress-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
@@ -955,6 +975,7 @@ body.light-mode {
 
 /* Light workspace theme: calm surfaces, strong hierarchy, and restrained accents. */
 :root {
+  --font-sans: "Segoe UI Variable", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --bg-deep: 220 33% 98%;
   --bg-surface: 0 0% 100%;
   --bg-card: 0 0% 100%;

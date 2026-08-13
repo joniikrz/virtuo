@@ -25,8 +25,7 @@ export default function ThemeToggle() {
   return (
     <button 
       onClick={toggleTheme} 
-      className="btn btn-secondary btn-sm" 
-      style={{ padding: '6px', borderRadius: '50%' }}
+      className="btn btn-secondary btn-sm nav-theme-toggle"
       title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
       aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
     >
