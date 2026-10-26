@@ -1,10 +1,12 @@
 # 1. Stage për build-in e Node/Express & Prisma
-FROM node:24-alpine AS build
+FROM node:24-slim AS build
 
 WORKDIR /app
 
 # Këtu duhet openssl sepse këtu është Prisma!
-RUN apk add --no-cache openssl libc6-compat
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 COPY prisma ./prisma/
@@ -25,11 +27,13 @@ FROM build AS production-dependencies
 RUN npm prune --omit=dev
 
 # 2. Stage për ekzekutimin në Production
-FROM node:24-alpine AS runtime
+FROM node:24-slim AS runtime
 
 WORKDIR /app
 
-RUN apk add --no-cache openssl libc6-compat
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 
 COPY --from=production-dependencies /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
